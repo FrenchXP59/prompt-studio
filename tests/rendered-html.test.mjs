@@ -37,6 +37,14 @@ test("ships the finished interface and its workshop resources", async () => {
   assert.match(page, /Exploitable/);
   assert.match(page, /À corriger ou vérifier/);
   assert.match(page, /À ne pas diffuser/);
+  assert.match(page, /Bibliothèque personnelle/i);
+  assert.match(page, /Variables rapides/i);
+  assert.match(page, /workshopIntroVideoUrl/);
+  assert.match(page, /SAS CONFIDENTIALITÉ AVANT IA/);
+  assert.match(page, /Du prompt à la méthode réutilisable/);
+  assert.match(page, /methodStable/);
+  assert.match(page, /Validation humaine indispensable/);
+  assert.match(page, /matière première d’un Skill/);
   assert.match(page, /pack-fiches-prompt-engineering\.pdf/);
   assert.match(layout, /Prompt Studio/);
   assert.match(css, /--violet/);
