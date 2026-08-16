@@ -299,6 +299,47 @@ button.chosen { border-color: var(--violet); background: var(--violet-pale); col
 
 .inline-help ul { padding-left: 31px; }
 
+.source-reminder {
+  position: sticky;
+  top: 10px;
+  z-index: 8;
+  margin: 13px 0;
+  border: 1px solid #ccd4e8;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 8px 22px rgba(27, 42, 78, .09);
+}
+
+.source-reminder summary {
+  cursor: pointer;
+  padding: 10px 13px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.source-reminder summary span {
+  margin-right: 8px;
+  color: var(--violet);
+  font-weight: 900;
+}
+
+.source-reminder > div {
+  display: grid;
+  grid-template-columns: .8fr 1.2fr;
+  gap: 14px;
+  padding: 0 13px 13px;
+}
+
+.source-reminder p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.48;
+}
+
+.source-reminder b { color: var(--ink); }
+
 .activity-card { margin-top: 17px; padding: 24px; }
 .activity-card h2, .oral-question h2 { margin-bottom: 8px; font-size: 27px; letter-spacing: -.04em; }
 .activity-card > p { margin-bottom: 15px; color: var(--ink-soft); line-height: 1.45; }
@@ -587,6 +628,7 @@ footer b { display: inline-grid; place-items: center; width: 15px; height: 15px;
 
 @media (max-width: 960px) {
   .mission-grid, .two-col, .iteration-layout, .control-layout, .oral-question { grid-template-columns: 1fr; }
+  .source-reminder > div { grid-template-columns: 1fr; }
   .diagnostic-board { grid-template-columns: repeat(2, 1fr); }
   .debrief-grid, .method-grid { grid-template-columns: 1fr 1fr; }
   .v1-card textarea { min-height: 220px; }

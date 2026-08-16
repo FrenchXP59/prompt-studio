@@ -433,6 +433,13 @@ function Sources({ app, update, go }: { app: AppState; update: UpdateApp; go: Go
       <summary>Besoin d’un repère ?</summary>
       <p><b>La demande</b> aide à comprendre le besoin. <b>La note validée</b> permet de décider ce qui peut être affirmé. Une absence devient une question ou une limite, jamais un fait inventé.</p>
     </details>
+    <details className="source-reminder">
+      <summary><span>Documents A/B</span> Garder les sources sous les yeux pendant le tri</summary>
+      <div>
+        <p><b>A · Demande reçue</b><br />Une communication claire, professionnelle et dynamique sur Cap Managers ; une fiche courte de suivi du lancement.</p>
+        <p><b>B · Note validée</b><br />{sourceFacts.join(" · ")}</p>
+      </div>
+    </details>
     <section className="activity-card">
       <span className="kicker">VOTRE ACTION</span>
       <h2>Classez les six affirmations.</h2>
