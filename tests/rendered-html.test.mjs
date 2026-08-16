@@ -45,6 +45,11 @@ test("ships the finished interface and its workshop resources", async () => {
   assert.match(page, /methodStable/);
   assert.match(page, /Validation humaine indispensable/);
   assert.match(page, /matière première d’un Skill/);
+  assert.match(page, /DIAGNOSTIC EXPRESS/);
+  assert.match(page, /Comparer mon diagnostic au débrief/);
+  assert.match(page, /TEST RÉEL DANS L’IA AUTORISÉE/);
+  assert.match(page, /Copier le prompt sécurisé/);
+  assert.doesNotMatch(page, /Absents des sources/);
   assert.match(page, /pack-fiches-prompt-engineering\.pdf/);
   assert.match(layout, /Prompt Studio/);
   assert.match(css, /--violet/);

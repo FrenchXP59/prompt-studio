@@ -34,11 +34,14 @@ const spaces: { id: Space; label: string; number: string }[] = [
 
 const diagnosticItems = [
   "Un pilote Cap Managers est prévu du 6 octobre au 14 novembre 2026.",
-  "Le programme est obligatoire pour tous les managers.",
-  "Le public est composé de 12 managers volontaires récemment nommés.",
   "Le lien et la date limite d’inscription doivent apparaître dans l’email.",
-  "La participation nécessite l’accord du responsable hiérarchique.",
-  "Le programme est certifiant et compte dans l’évaluation annuelle.",
+  "Le pilote est obligatoire, certifiant et compte dans l’évaluation annuelle.",
+];
+
+const diagnosticDebrief = [
+  { status: "confirmé", reason: "Les dates du pilote figurent dans la note validée." },
+  { status: "à clarifier", reason: "Ces informations seraient utiles dans l’email, mais ni le lien ni la date limite ne figurent dans les sources." },
+  { status: "ne pas inventer", reason: "La note dit explicitement l’inverse : le pilote est volontaire, non certifiant et sans lien avec l’évaluation." },
 ];
 
 const sourceFacts = [
@@ -50,13 +53,9 @@ const sourceFacts = [
   "Le pilote n’est ni certifiant, ni obligatoire, ni lié à l’évaluation de la performance.",
 ];
 
-const missingFacts = [
-  "date et horaire de l’atelier initial",
-  "modalité et date limite d’inscription",
-  "personne de contact",
-  "modalités techniques de connexion",
-  "critères de sélection au-delà de 12 demandes",
-];
+const diagnosticPromptStart = "DOCUMENT A · DEMANDE REÇUE\n« Nous devons communiquer rapidement sur Cap Managers. Il faudrait un message qui donne envie aux managers de participer, et une fiche courte pour suivre le lancement. Nous avons une note, mais il faut que ce soit clair, professionnel et dynamique. »\n\nDOCUMENT B · NOTE VALIDÉE\n" + sourceFacts.map((fact) => "- " + fact).join("\n") + "\n\nÀ partir de ces documents, rédige un email court et dynamique pour encourager les managers à participer à Cap Managers.";
+
+const diagnosticPromptSafe = diagnosticPromptStart + "\n\nUtilise uniquement les faits confirmés du DOCUMENT B. N’invente aucune information absente ou contraire aux sources. Avant de rédiger, liste ce qui doit être confirmé pour finaliser l’email.";
 
 const v1Lines = [
   "Inscrivez-vous vite à Cap Managers, le programme certifiant pour tous les managers.",
@@ -78,6 +77,10 @@ const emptyApp = {
   activeSpace: "mission" as Space,
   role: "pilote",
   diagnostic: diagnosticItems.map(() => "" as DiagnosticChoice),
+  diagnosticVersion: 2,
+  diagnosticReviewed: false,
+  diagnosticAiOutput: "",
+  diagnosticAiLearning: "",
   questions: "",
   contentType: "Email aux managers",
   objective: "",
@@ -134,7 +137,15 @@ export default function Home() {
     const saved = window.localStorage.getItem("prompt-studio-v1");
     if (saved) {
       try {
-        setApp({ ...emptyApp, ...JSON.parse(saved) });
+        const savedApp = JSON.parse(saved);
+        setApp({
+          ...emptyApp,
+          ...savedApp,
+          diagnostic: savedApp.diagnosticVersion === 2 && Array.isArray(savedApp.diagnostic)
+            ? diagnosticItems.map((_, index) => savedApp.diagnostic[index] || "")
+            : emptyApp.diagnostic,
+          diagnosticVersion: 2,
+        });
       } catch {
         window.localStorage.removeItem("prompt-studio-v1");
       }
@@ -192,7 +203,7 @@ export default function Home() {
       </nav>
 
       {app.activeSpace === "mission" && <Mission app={app} update={update} go={go} openQuiz={() => { setQuiz(0); setQuizAnswer(""); }} />}
-      {app.activeSpace === "diagnostic" && <Diagnostic app={app} update={update} go={go} openQuiz={() => { setQuiz(1); setQuizAnswer(""); }} />}
+      {app.activeSpace === "diagnostic" && <Diagnostic app={app} update={update} go={go} />}
       {app.activeSpace === "lab" && <PromptLab app={app} update={update} proposedPrompt={proposedPrompt} go={go} openQuiz={() => { setQuiz(2); setQuizAnswer(""); }} />}
       {app.activeSpace === "iteration" && <Iteration app={app} update={update} go={go} />}
       {app.activeSpace === "quality" && <QualityCheck app={app} update={update} controlPrompt={controlPrompt} go={go} openQuiz={() => { setQuiz(3); setQuizAnswer(""); }} />}
@@ -232,21 +243,25 @@ function Mission({ app, update, go, openQuiz }: any) {
   </section>;
 }
 
-function Diagnostic({ app, update, go, openQuiz }: any) {
+function Diagnostic({ app, update, go }: any) {
   const cycle = (index: number) => {
     const order: DiagnosticChoice[] = ["", "confirmé", "à clarifier", "ne pas inventer"];
     const next = order[(order.indexOf(app.diagnostic[index]) + 1) % order.length];
-    const diagnostic = [...app.diagnostic]; diagnostic[index] = next; update("diagnostic", diagnostic);
+    const diagnostic = diagnosticItems.map((_, current) => app.diagnostic[current] || ""); diagnostic[index] = next; update("diagnostic", diagnostic); update("diagnosticReviewed", false);
   };
   return <section className="page-grid diagnostic-page">
-    <div className="page-heading"><p className="eyebrow">02 · DIAGNOSTIC</p><h1>Ce qui manque compte autant que ce qui est dit.</h1><p>Classez les informations du brief. Cliquer plusieurs fois fait évoluer le statut.</p></div>
+    <div className="page-heading"><p className="eyebrow">02 · DIAGNOSTIC EXPRESS</p><h1>Avant le prompt, poser les bonnes limites.</h1><p>Cette séquence prépare votre premier test dans une vraie IA : elle sépare les faits utilisables, les questions à poser et les affirmations à écarter.</p></div>
     <div className="two-col source-layout">
       <article className="document dark"><span>DOCUMENT A · DEMANDE REÇUE</span><p>« Nous devons communiquer rapidement sur Cap Managers. Il faudrait un message qui donne envie aux managers de participer, et une fiche courte pour suivre le lancement. Nous avons une note, mais il faut que ce soit clair, professionnel et dynamique. »</p></article>
-      <article className="document"><span>DOCUMENT B · NOTE VALIDÉE</span><ul>{sourceFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul><p className="missing"><b>Absents des sources :</b> {missingFacts.join(" · ")}</p></article>
+      <article className="document"><span>DOCUMENT B · NOTE VALIDÉE</span><ul>{sourceFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul></article>
     </div>
-    <div className="diagnostic-board">{diagnosticItems.map((item, index) => <button key={item} className={`diagnostic-item ${app.diagnostic[index].replaceAll(" ", "-")}`} onClick={() => cycle(index)}><span>{index + 1}</span><p>{item}</p><em>{app.diagnostic[index] || "à classer"}</em></button>)}</div>
-    <div className="questions-card"><div><span className="kicker">LE CHALLENGER QUESTIONNE</span><h2>Quelles trois précisions changeraient réellement votre production ?</h2></div><textarea value={app.questions} onChange={(e) => update("questions", e.target.value)} placeholder="Ex. Quelle modalité d’inscription doit apparaître dans l’email ?" /></div>
-    <div className="action-row"><button className="soft" onClick={openQuiz}>Micro-quiz · informations absentes</button><button className="primary" onClick={() => go("lab")}>Passer au Prompt Lab <span>→</span></button></div>
+    <div className="diagnostic-brief"><div><span className="kicker">MICRO-EXERCICE · 4 MIN</span><h2>Classez les trois affirmations.</h2><p>Chaque carte est une affirmation qui pourrait se retrouver dans votre prompt ou dans un output. Cliquez jusqu’au statut qui vous paraît juste.</p></div><div className="diagnostic-legend"><span><b>Confirmé</b> : la note validée l’affirme.</span><span><b>À clarifier</b> : ce serait utile, mais l’information manque.</span><span><b>Ne pas inventer</b> : ce n’est pas justifié ou cela contredit les sources.</span></div></div>
+    <div className="diagnostic-board compact">{diagnosticItems.map((item, index) => <button key={item} className={"diagnostic-item " + app.diagnostic[index].replaceAll(" ", "-")} onClick={() => cycle(index)}><span>{index + 1}</span><p>{item}</p><em>{app.diagnostic[index] || "à classer"}</em></button>)}</div>
+    <div className="diagnostic-actions"><button className="soft" onClick={() => update("diagnosticReviewed", !app.diagnosticReviewed)}>{app.diagnosticReviewed ? "Masquer le débrief" : "Comparer mon diagnostic au débrief"}</button><span>Sans note : l’objectif est d’expliciter le raisonnement avant le test IA.</span></div>
+    {app.diagnosticReviewed && <div className="diagnostic-debrief"><span className="kicker">REPÈRES DE DÉBRIEF</span>{diagnosticDebrief.map((item, index) => <div key={item.reason}><b>{index + 1} · {item.status}</b><p>{item.reason}</p></div>)}</div>}
+    <div className="questions-card"><div><span className="kicker">LE CHALLENGER QUESTIONNE</span><h2>Parmi les informations absentes, quelles sont les trois qui changeraient le plus votre prompt ou votre livrable ?</h2><p>Il y en a davantage : choisissez celles qui ont le plus d’effet sur la production en cours.</p></div><textarea value={app.questions} onChange={(e) => update("questions", e.target.value)} placeholder="Ex. Quelle modalité d’inscription doit apparaître dans l’email ?" /></div>
+    <section className="diagnostic-ai-card"><div><span className="kicker">TEST RÉEL DANS L’IA AUTORISÉE · 8 MIN</span><h2>Observez l’effet de votre consigne.</h2><p>Copiez d’abord le prompt de départ dans votre IA autorisée. Puis comparez-le, si utile, au prompt sécurisé. L’IA ne fait pas le diagnostic à votre place : elle rend les conséquences visibles.</p><div className="diagnostic-copy-actions"><button className="soft" onClick={() => navigator.clipboard?.writeText(diagnosticPromptStart)}>Copier le prompt de départ</button><button className="copy" onClick={() => navigator.clipboard?.writeText(diagnosticPromptSafe)}>Copier le prompt sécurisé</button></div></div><div><label className="field"><span>Output obtenu dans l’IA</span><textarea value={app.diagnosticAiOutput} onChange={(e) => update("diagnosticAiOutput", e.target.value)} placeholder="Collez ici l’email, la liste des manquants ou un extrait significatif…" /></label><label className="field"><span>Ce que vous retenez</span><textarea value={app.diagnosticAiLearning} onChange={(e) => update("diagnosticAiLearning", e.target.value)} placeholder="Qu’est-ce que l’IA a affirmé sans source, ou aurait-elle dû vous demander ?" /></label></div></section>
+    <div className="action-row"><span>Vous avez maintenant une base factuelle et des limites à intégrer au prompt.</span><button className="primary" onClick={() => go("lab")}>Passer au Prompt Lab <span>→</span></button></div>
   </section>;
 }
 
