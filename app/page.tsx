@@ -59,16 +59,59 @@ const sourceFacts = [
   "Le pilote n’est ni certifiant, ni obligatoire, ni lié à l’évaluation de la performance.",
 ];
 
+const sourceBlock = sourceFacts.map((fact) => "- " + fact).join("\n");
+
 const v1Lines = [
   "Inscrivez-vous vite à Cap Managers, le programme certifiant pour tous les managers.",
   "Dès le 6 octobre, vous participerez à plusieurs sessions animées par nos experts.",
   "Le parcours certifiant comprend un atelier collectif, un coaching individuel et des échanges réguliers.",
-  "Inscrivez-vous avant le 30 septembre sur le portail RH.",
+  "Inscrivez-vous avant le 30 septembre sur le portail interne.",
   "Votre participation sera prise en compte dans votre évaluation annuelle.",
 ];
 
+const sampleV1 = `Objet : Inscrivez-vous au programme certifiant Cap Managers
+
+Bonjour,
+
+HelioTech lance Cap Managers, un programme obligatoire destiné à tous les managers. À partir du 6 octobre, vous participerez à plusieurs sessions animées par nos experts, avec un atelier collectif, un coaching individuel et des échanges réguliers.
+
+Ce parcours certifiant sera pris en compte dans votre évaluation annuelle. Merci de vous inscrire avant le 30 septembre sur le portail interne.
+
+Cordialement,`;
+
+const iterationFeedback = `Le message est clair, mais un manager doit comprendre immédiatement ce qu’il va travailler, ce qui est attendu de lui et que la participation est volontaire. Raccourcis l’introduction et ajoute, en fin de message, une check-list “Avant de vous inscrire” de trois points maximum. N’invente aucune information absente des sources.`;
+
+const iterationPromptTemplate = `Reprends la V1 ci-dessous.
+Conserve uniquement les informations confirmées dans les sources.
+Raccourcis l’introduction à deux phrases.
+Rends explicites l’objectif du programme, le caractère volontaire de la participation et la nécessité de l’accord du responsable hiérarchique.
+Ajoute à la fin une check-list intitulée « Avant de vous inscrire », limitée à trois points, uniquement à partir des informations disponibles.
+Ne crée ni lien, ni date limite, ni modalités techniques absents des sources.
+Fournis une V2 complète de l’email.
+
+Sources :
+${sourceBlock}
+
+V1 à améliorer :
+[coller ici la V1]`;
+
+const v2Example = `Objet : Cap Managers — pilote pour managers récemment nommés
+
+Bonjour,
+
+HelioTech Services prépare le lancement de Cap Managers, un pilote destiné à 12 managers volontaires nommés depuis moins de 18 mois. L’objectif est de vous aider à préparer un rituel d’équipe de 30 minutes et à formuler un retour constructif.
+
+Le pilote se déroulera du 6 octobre au 14 novembre 2026. Il comprend un atelier collectif à distance de 90 minutes et un échange de pratiques de 45 minutes en quatrième semaine, pour une charge estimée à 2 h 15.
+
+Avant de vous inscrire :
+- vérifier que vous êtes volontaire pour participer au pilote ;
+- obtenir l’accord de votre responsable hiérarchique ;
+- noter que les modalités pratiques d’inscription restent à confirmer.
+
+À confirmer avant diffusion : lien d’inscription, date limite, contact et modalités techniques de connexion.`;
+
 const qualityRows = [
-  ["Tous les managers s’inscrivent sur le portail RH", "public, portail, date limite"],
+  ["Tous les managers s’inscrivent sur le portail interne", "public, portail, date limite"],
   ["Session en visioconférence le 6 octobre à 9 h 30", "horaire"],
   ["Obtenir la certification Cap Managers", "certification"],
   ["Enquête utilisée pour l’évaluation annuelle", "usage du retour d’expérience"],
@@ -94,6 +137,7 @@ const emptyApp = {
   unknowns: "",
   prompt: "",
   pastedOutput: "",
+  iteratedOutput: "",
   annotations: v1Lines.map(() => false),
   keep: "",
   change: "",
@@ -170,13 +214,39 @@ export default function Home() {
   };
 
   const proposedPrompt = useMemo(() => {
-    const type = app.contentType.toLowerCase();
-    return `${app.rolePrompt ? `Adopte le point de vue suivant, seulement s’il aide réellement : ${app.rolePrompt}.\n\n` : ""}À partir des sources autorisées ci-dessous, prépare un premier brouillon de ${type}.\n\nObjectif : ${app.objective || "[objectif à préciser]"}\nPublic : ${app.audience || "[public à préciser]"}\nSources autorisées : ${app.sources || "[indiquer les sources disponibles]"}\nContraintes utiles : ${app.constraints || "[indiquer uniquement les contraintes qui changent le résultat]"}\nFormat attendu : ${app.format || "[forme de sortie à préciser]"}\n\nNe complète aucune information absente des sources. Avant la réponse, liste les éléments à confirmer : ${app.unknowns || "[informations manquantes à signaler]"}.`;
+    return `${app.rolePrompt ? `Adopte le point de vue suivant, seulement s’il aide réellement : ${app.rolePrompt}.\n\n` : ""}À partir uniquement des sources autorisées ci-dessous, prépare une première version d’email.
+
+Objectif : ${app.objective || "Présenter le pilote Cap Managers aux managers concernés sans inventer les informations absentes."}
+Public : ${app.audience || "Managers volontaires récemment nommés"}
+Sources autorisées :
+${app.sources || sourceBlock}
+
+Contraintes utiles :
+${app.constraints || "- Utiliser uniquement les faits confirmés.\n- Signaler les informations manquantes.\n- Ne pas présenter le pilote comme obligatoire, certifiant ou lié à l’évaluation."}
+
+Format attendu : ${app.format || "Email court avec objet, corps de message et section À confirmer avant diffusion si nécessaire."}
+
+Ne complète aucune information absente des sources. Avant la réponse finale, liste les éléments à confirmer : ${app.unknowns || "[informations manquantes à signaler]"}.`;
   }, [app]);
 
   const controlPrompt = useMemo(
     () =>
-      `Relis le contenu ci-dessous uniquement au regard des sources fournies. Pour chaque écart, indique : l’extrait concerné, le fait ou la consigne à vérifier, le risque, puis une correction possible. Distingue les informations confirmées des informations absentes. Ne prends pas la décision finale à la place de la personne responsable.\n\nContenu à contrôler : [coller ici l’output]`,
+      `Contrôle l’email ci-dessous uniquement au regard des sources fournies.
+
+Pour chaque affirmation importante, indique :
+- confirmée par les sources ;
+- à vérifier car absente ou insuffisamment précise ;
+- contradictoire avec les sources.
+
+Signale les informations absentes qui peuvent empêcher la diffusion.
+Ne réécris pas l’email.
+Ne prends pas la décision finale de diffusion : cette décision reste humaine.
+
+Sources :
+${sourceBlock}
+
+Email à contrôler :
+[coller ici la V2]`,
     [],
   );
 
@@ -212,7 +282,7 @@ export default function Home() {
       {app.activeSpace === "challenge" && <Challenge app={app} update={update} exportSheet={exportSheet} />}
 
       {resourcesOpen && <Resources onClose={() => setResourcesOpen(false)} />}
-      {quiz && <Quiz id={quiz} answer={quizAnswer} setAnswer={setQuizAnswer} onClose={() => setQuiz(null)} />}
+      {quiz !== null && <Quiz id={quiz} answer={quizAnswer} setAnswer={setQuizAnswer} onClose={() => setQuiz(null)} />}
 
       <footer>
         <span>Frédéric Legrand</span><span>·</span>
@@ -230,7 +300,7 @@ function Mission({ app, update, go, openQuiz }: any) {
     <h1>Du besoin flou<br /><em>à l’output maîtrisé.</em></h1>
     <p className="lead">Un atelier de pratique : diagnostiquer, prompter, dialoguer, itérer et contrôler — sans chercher un prompt parfait.</p>
     <div className="mission-card">
-      <div><span className="kicker">MISSION COMMUNE</span><h2>HelioTech Services · Cap Managers</h2><p>Préparer deux contenus fiables à partir des mêmes données, sans inventer ce que les sources ne disent pas.</p></div>
+      <div><span className="kicker">MISSION COMMUNE</span><h2>HelioTech Services · Cap Managers</h2><p>Préparer un email fiable à partir de données incomplètes, sans inventer ce que les sources ne disent pas.</p></div>
       <div className="role-choice"><span>Votre premier rôle</span><div><button className={app.role === "pilote" ? "chosen" : ""} onClick={() => update("role", "pilote")}>Pilote</button><button className={app.role === "challenger" ? "chosen" : ""} onClick={() => update("role", "challenger")}>Challenger</button></div><small>Les rôles alterneront pendant l’atelier.</small></div>
     </div>
     <div className="principles"><span>Prompt</span><i>→</i><span>Dialogue</span><i>→</i><span>Itération</span><i>→</i><span>Contrôle</span></div>
@@ -265,7 +335,7 @@ Contexte :
 HelioTech Services prépare le lancement de Cap Managers. La demande reçue souhaite un message dynamique et utile, mais la rédaction doit rester strictement appuyée sur la note validée.
 
 Sources autorisées :
-${sourceFacts.map((fact) => "- " + fact).join("\n")}
+${sourceBlock}
 
 Faits confirmés repérés pendant le diagnostic :
 ${confirmed.length ? confirmed.map((item) => "- " + item).join("\n") : "- [à compléter à partir des cartes classées confirmé]"}
@@ -284,7 +354,7 @@ Propose un email avec un objet, un corps de message court et une section finale 
     update("contentType", "Email aux managers");
     update("objective", "Présenter le pilote Cap Managers aux managers concernés sans inventer les informations absentes.");
     update("audience", "Managers volontaires récemment nommés");
-    update("sources", "Document B · note validée HelioTech Services / Cap Managers");
+    update("sources", sourceBlock);
     update("constraints", "Utiliser uniquement les faits confirmés. Signaler les informations manquantes. Ne pas présenter le pilote comme obligatoire, certifiant ou lié à l’évaluation.");
     update("format", "Email court avec objet, corps de message et section À confirmer avant diffusion si nécessaire.");
     update("unknowns", [app.questions.trim(), ...unclear].filter(Boolean).join("\n"));
@@ -310,31 +380,33 @@ Propose un email avec un objet, un corps de message court et une section finale 
 
 function PromptLab({ app, update, proposedPrompt, go, openQuiz }: any) {
   return <section className="page-grid">
-    <div className="page-heading"><p className="eyebrow">03 · PROMPT LAB</p><h1>Construire une demande qui aide vraiment.</h1><p>Le canevas est facultatif. Utilisez uniquement les repères utiles à votre situation et modifiez librement le texte proposé.</p></div>
+    <div className="page-heading"><p className="eyebrow">03 · PROMPT LAB</p><h1>Tester un prompt sur une vraie IA.</h1><p>Le canevas reste une aide. L’objectif est de produire une V1 réelle, puis d’observer ce que l’IA fait quand la consigne contient des faits, des limites et des inconnues.</p></div>
     <div className="lab-layout">
-      <aside className="lab-tools"><span className="kicker">CHOISIR LE LIVRABLE</span><button className={app.contentType === "Email aux managers" ? "selected" : ""} onClick={() => update("contentType", "Email aux managers")}>01 · Email aux managers</button><button className={app.contentType === "Tableau de suivi" ? "selected" : ""} onClick={() => update("contentType", "Tableau de suivi")}>02 · Tableau de suivi</button><p>Les deux participants travaillent des livrables différents, puis comparent ce qui change réellement.</p></aside>
-      <div className="form-card"><div className="form-title"><span className="kicker">CANEVAS SANS OBLIGATION</span><p>Vous pouvez ignorer un champ, notamment le rôle, ou écrire votre prompt directement.</p></div><div className="field-grid"><Field label="Objectif" value={app.objective} onChange={(v: string) => update("objective", v)} placeholder="Ce que le contenu doit permettre" /><Field label="Public" value={app.audience} onChange={(v: string) => update("audience", v)} placeholder="Destinataire réel" /><Field label="Sources autorisées" value={app.sources} onChange={(v: string) => update("sources", v)} placeholder="Note Cap Managers validée" /><Field label="Rôle (facultatif)" value={app.rolePrompt} onChange={(v: string) => update("rolePrompt", v)} placeholder="Seulement s’il apporte un point de vue utile" /><Field label="Contraintes utiles" value={app.constraints} onChange={(v: string) => update("constraints", v)} placeholder="Ce qu’il faut respecter ou éviter" /><Field label="Format attendu" value={app.format} onChange={(v: string) => update("format", v)} placeholder="Objet + corps + action, tableau…" /></div><Field label="Informations à signaler comme absentes" value={app.unknowns} onChange={(v: string) => update("unknowns", v)} placeholder="Date précise, inscription, contact…" /></div>
-      <div className="prompt-card"><span className="kicker">VOTRE PROMPT, MODIFIABLE</span><p>La trame n’est proposée qu’à votre demande.</p><button className="soft full" onClick={() => update("prompt", proposedPrompt)}>Proposer une trame adaptée</button><textarea value={app.prompt} onChange={(e) => update("prompt", e.target.value)} placeholder="Écrivez ou adaptez votre prompt ici…" /><button className="copy" onClick={() => navigator.clipboard?.writeText(app.prompt)}>Copier le prompt</button></div>
+      <aside className="lab-tools"><span className="kicker">TEST RÉEL · 10 MIN</span><ol><li>Relisez le prompt issu du diagnostic.</li><li>Copiez-le dans l’IA autorisée.</li><li>Collez la V1 obtenue dans l’application.</li></ol><p>Le binôme ne cherche pas “la bonne réponse” : il observe où l’IA respecte les sources, où elle reste floue, et où elle risque d’inventer.</p></aside>
+      <div className="form-card"><div className="form-title"><span className="kicker">CANEVAS FACULTATIF</span><p>Complétez seulement ce qui aide. Le rôle n’est pas obligatoire : une bonne source et une limite claire valent souvent mieux qu’un personnage artificiel.</p></div><div className="field-grid"><Field label="Objectif" value={app.objective} onChange={(v: string) => update("objective", v)} placeholder="Ce que le contenu doit permettre" /><Field label="Public" value={app.audience} onChange={(v: string) => update("audience", v)} placeholder="Destinataire réel" /><Field label="Sources autorisées" value={app.sources} onChange={(v: string) => update("sources", v)} placeholder="Note Cap Managers validée" /><Field label="Rôle (facultatif)" value={app.rolePrompt} onChange={(v: string) => update("rolePrompt", v)} placeholder="Seulement s’il apporte un point de vue utile" /><Field label="Contraintes utiles" value={app.constraints} onChange={(v: string) => update("constraints", v)} placeholder="Ce qu’il faut respecter ou éviter" /><Field label="Format attendu" value={app.format} onChange={(v: string) => update("format", v)} placeholder="Objet + corps + action" /></div><Field label="Informations à signaler comme absentes" value={app.unknowns} onChange={(v: string) => update("unknowns", v)} placeholder="Date limite, lien, contact, modalités techniques…" /></div>
+      <div className="prompt-card"><span className="kicker">PROMPT À COPIER-COLLER</span><p>Modifiez librement le texte avant de le tester dans l’IA.</p><button className="soft full" onClick={() => update("prompt", proposedPrompt)}>Reconstruire depuis le canevas</button><textarea value={app.prompt} onChange={(e) => update("prompt", e.target.value)} placeholder="Écrivez ou adaptez votre prompt ici…" /><button className="copy" onClick={() => navigator.clipboard?.writeText(app.prompt)}>Copier le prompt pour l’IA</button></div>
     </div>
     <PromptLibrary app={app} update={update} />
-    <div className="output-strip"><div><span className="kicker">APRÈS TEST DANS L’OUTIL IA AUTORISÉ</span><h2>Collez l’output obtenu.</h2><p>Le binôme lira ensuite le résultat à partir de la demande et des sources.</p></div><textarea value={app.pastedOutput} onChange={(e) => update("pastedOutput", e.target.value)} placeholder="Coller ici l’output de test…" /></div>
-    <div className="action-row"><button className="soft" onClick={openQuiz}>Micro-quiz · changer de contenu</button><button className="primary" onClick={() => go("iteration")}>Ouvrir le Studio d’itération <span>→</span></button></div>
+    <div className="output-strip"><div><span className="kicker">V1 OBTENUE DANS L’IA</span><h2>Collez le premier résultat.</h2><p>Si le modèle produit déjà une réponse propre, c’est intéressant aussi : l’exercice portera alors sur l’amélioration ciblée et le contrôle.</p></div><textarea value={app.pastedOutput} onChange={(e) => update("pastedOutput", e.target.value)} placeholder="Coller ici l’email V1 obtenu dans l’IA autorisée…" /></div>
+    <div className="action-row"><button className="soft" onClick={openQuiz}>Micro-quiz · itérer utilement</button><button className="primary" onClick={() => go("iteration")}>Ouvrir le Studio d’itération <span>→</span></button></div>
   </section>;
 }
 
 function Iteration({ app, update, go }: any) {
+  const v1ForDisplay = app.pastedOutput.trim() || sampleV1;
   return <section className="page-grid">
-    <div className="page-heading"><p className="eyebrow">04 · STUDIO D’ITÉRATION</p><h1>Ne recommencez pas : faites évoluer.</h1><p>Conservez ce qui fonctionne, ciblez l’écart, puis testez une instruction d’amélioration.</p></div>
-    <div className="iteration-grid"><article className="v1-card"><span className="kicker">OUTPUT V1 · À ANNOTER</span><h2>Cap Managers</h2>{v1Lines.map((line, index) => <button key={line} className={app.annotations[index] ? "flagged" : ""} onClick={() => { const annotations = [...app.annotations]; annotations[index] = !annotations[index]; update("annotations", annotations); }}><i>{app.annotations[index] ? "!" : "○"}</i>{line}</button>)}</article><article className="iteration-notes"><span className="kicker">INSTRUCTION D’ITÉRATION</span><Field label="À conserver" value={app.keep} onChange={(v: string) => update("keep", v)} placeholder="Ex. intention informative et ton direct" /><Field label="À modifier" value={app.change} onChange={(v: string) => update("change", v)} placeholder="Ex. les faits non justifiés" /><Field label="À vérifier" value={app.verify} onChange={(v: string) => update("verify", v)} placeholder="Ex. les modalités d’inscription" /><textarea value={app.iterationPrompt} onChange={(e) => update("iterationPrompt", e.target.value)} placeholder="Écrivez ici l’instruction : conserve…, retire…, signale…" /></article><article className="v2-card"><span className="kicker">OUTPUT V2 · COMPARER</span><h2>Cap Managers : un pilote pour les managers récemment nommés</h2><p>L’équipe Développement des compétences prépare le lancement de Cap Managers, un pilote destiné à 12 managers volontaires nommés dans leur fonction depuis moins de 18 mois.</p><p>Du 6 octobre au 14 novembre 2026, le parcours comprend un atelier collectif à distance de 90 minutes, puis un échange de pratiques de 45 minutes durant la quatrième semaine.</p><p>Les modalités pratiques et d’inscription vous seront communiquées prochainement.</p><div className="better">Les informations absentes sont rendues visibles ; elles ne sont pas inventées.</div></article></div>
-    <div className="action-row"><button className="soft" onClick={() => update("iterationPrompt", `Conserve ${app.keep || "les éléments utiles"}. Corrige ${app.change || "les écarts identifiés"}. Signale explicitement ce qui reste à vérifier : ${app.verify || "les informations absentes"}.`)}>Proposer une instruction ciblée</button><button className="primary" onClick={() => go("quality")}>Passer au Quality Check <span>→</span></button></div>
+    <div className="page-heading"><p className="eyebrow">04 · STUDIO D’ITÉRATION</p><h1>Améliorer sans repartir de zéro.</h1><p>Une itération utile ne dit pas seulement “améliore”. Elle précise ce qui change : le fond, la forme, les contraintes, puis elle vérifie que l’IA n’a pas comblé les trous.</p></div>
+    <div className="iteration-grid"><article className="v1-card"><span className="kicker">V1 À OBSERVER</span><h2>Email obtenu</h2><textarea value={v1ForDisplay} onChange={(e) => update("pastedOutput", e.target.value)} aria-label="V1 à améliorer" /><div className="v1-flags"><span>À repérer en binôme</span>{v1Lines.map((line, index) => <button key={line} className={app.annotations[index] ? "flagged" : ""} onClick={() => { const annotations = [...app.annotations]; annotations[index] = !annotations[index]; update("annotations", annotations); }}><i>{app.annotations[index] ? "!" : "○"}</i>{line}</button>)}</div></article><article className="iteration-notes"><span className="kicker">RETOUR MÉTIER</span><blockquote>{iterationFeedback}</blockquote><Field label="À conserver" value={app.keep} onChange={(v: string) => update("keep", v)} placeholder="Ex. ton clair, structure courte" /><Field label="À ajouter" value={app.change} onChange={(v: string) => update("change", v)} placeholder="Ex. checklist Avant de vous inscrire" /><Field label="À verrouiller" value={app.verify} onChange={(v: string) => update("verify", v)} placeholder="Ex. aucun lien, horaire ou délai inventé" /><textarea value={app.iterationPrompt} onChange={(e) => update("iterationPrompt", e.target.value)} placeholder="Écrivez ici l’instruction d’itération à copier dans l’IA…" /><button className="copy" onClick={() => navigator.clipboard?.writeText(app.iterationPrompt)}>Copier l’instruction</button></article><article className="v2-card"><span className="kicker">V2 APRÈS TEST</span><h2>Checklist finale, mais sobre.</h2><p>La check-list sert à rendre l’action claire. Elle doit rester courte et s’appuyer uniquement sur les sources confirmées.</p><textarea value={app.iteratedOutput} onChange={(e) => update("iteratedOutput", e.target.value)} placeholder={v2Example} /><div className="better">Critère clé : les absences restent visibles, même quand la V2 paraît fluide.</div></article></div>
+    <div className="action-row"><button className="soft" onClick={() => update("iterationPrompt", iterationPromptTemplate.replace("[coller ici la V1]", app.pastedOutput.trim() || "[coller ici la V1]"))}>Proposer l’instruction avec checklist</button><button className="primary" onClick={() => go("quality")}>Passer au Quality Check <span>→</span></button></div>
   </section>;
 }
 
 function QualityCheck({ app, update, controlPrompt, go, openQuiz }: any) {
   const cycle = (index: number) => { const order: Decision[] = ["", "Exploitable", "À corriger ou vérifier", "À ne pas diffuser"]; const quality = [...app.quality]; quality[index] = order[(order.indexOf(quality[index]) + 1) % order.length]; update("quality", quality); };
+  const promptToCopy = app.controlPrompt.trim() || controlPrompt.replace("[coller ici la V2]", app.iteratedOutput.trim() || "[coller ici la V2]");
   return <section className="page-grid">
     <div className="page-heading"><p className="eyebrow">05 · QUALITY CHECK</p><h1>Une réponse fluide n’est pas forcément exploitable.</h1><p>La décision appartient toujours à une personne. L’application aide à rendre les écarts visibles.</p></div>
-    <div className="quality-layout"><article className="quality-table"><span className="kicker">TABLEAU À AUDITER</span><h2>Suivi du pilote Cap Managers</h2>{qualityRows.map(([line, issue], index) => <button key={line} className={app.quality[index].replaceAll(" ", "-").replaceAll("à", "a")} onClick={() => cycle(index)}><span>{index + 1}</span><p>{line}<small>Écart potentiel : {issue}</small></p><em>{app.quality[index] || "à examiner"}</em></button>)}</article><article className="control-card"><span className="kicker">PROMPT DE CONTRÔLE</span><p>Demandez d’abord un diagnostic : extrait, écart, risque, correction. La décision finale reste humaine.</p><textarea value={app.controlPrompt} onChange={(e) => update("controlPrompt", e.target.value)} placeholder={controlPrompt} /><button className="soft full" onClick={() => update("controlPrompt", controlPrompt)}>Proposer un prompt de contrôle</button><div className="human-decision"><span>Décision humaine finale</span>{(["Exploitable", "À corriger ou vérifier", "À ne pas diffuser"] as Decision[]).map((item) => <button key={item} className={app.qualityDecision === item ? "chosen" : ""} onClick={() => update("qualityDecision", item)}>{item}</button>)}</div></article></div>
+    <div className="quality-layout"><article className="quality-table"><span className="kicker">MINI-AUDIT HUMAIN</span><h2>Écarts à classer</h2><p className="quality-intro">Cliquez pour choisir le statut adapté. Ce classement prépare la décision, il ne la remplace pas.</p>{qualityRows.map(([line, issue], index) => <button key={line} className={app.quality[index].replaceAll(" ", "-").replaceAll("à", "a")} onClick={() => cycle(index)}><span>{index + 1}</span><p>{line}<small>Point à contrôler : {issue}</small></p><em>{app.quality[index] || "à examiner"}</em></button>)}</article><article className="control-card"><span className="kicker">PROMPT DE CONTRÔLE</span><p>Copiez ce prompt dans l’IA pour obtenir un diagnostic factuel de la V2. L’IA ne doit ni réécrire directement, ni décider de diffuser.</p><textarea value={app.controlPrompt} onChange={(e) => update("controlPrompt", e.target.value)} placeholder={controlPrompt.replace("[coller ici la V2]", app.iteratedOutput.trim() || "[coller ici la V2]")} /><div className="control-actions"><button className="soft" onClick={() => update("controlPrompt", controlPrompt.replace("[coller ici la V2]", app.iteratedOutput.trim() || "[coller ici la V2]"))}>Proposer le prompt de contrôle</button><button className="copy" onClick={() => navigator.clipboard?.writeText(promptToCopy)}>Copier pour l’IA</button></div><div className="human-decision"><span>Décision humaine finale</span>{(["Exploitable", "À corriger ou vérifier", "À ne pas diffuser"] as Decision[]).map((item) => <button key={item} className={app.qualityDecision === item ? "chosen" : ""} onClick={() => update("qualityDecision", item)}>{item}</button>)}</div></article></div>
     <div className="action-row"><button className="soft" onClick={openQuiz}>Micro-quiz · décision humaine</button><button className="primary" onClick={() => go("challenge")}>Lancer le Challenge final <span>→</span></button></div>
   </section>;
 }
@@ -415,7 +487,7 @@ function Resources({ onClose }: { onClose: () => void }) {
 const quizData = {
   0: { title: "Demande ou source ?", question: "Avant de demander un contenu à une IA, quel document permet de décider ce qui peut être affirmé ?", options: ["La demande reçue : elle donne le ton attendu.", "Le document qui contient le plus d’informations.", "La note validée : elle établit les faits utilisables.", "L’output le plus convaincant produit par l’IA."], answer: 2, debrief: "La demande A aide à comprendre l’intention et le livrable. La note B est la base factuelle : ce qui n’y figure pas doit rester à confirmer, pas être inventé." },
   1: { title: "Une information absente", question: "La source ne précise pas la modalité d’inscription. Quelle action est la plus rigoureuse ?", options: ["Ajouter un lien vers le portail RH.", "Indiquer une date limite raisonnable.", "Signaler l’information manquante et prévoir une formulation provisoire.", "Ne rien mentionner dans l’email."], answer: 2, debrief: "Une modalité peut être indispensable au livrable sans pour autant être inventée. Rendez son absence visible ou demandez-la." },
-  2: { title: "Changer de contenu", question: "Pour passer de l’email au tableau opérationnel, quelle adaptation est la plus importante ?", options: ["Ajouter un rôle plus prestigieux à l’IA.", "Changer le format, les colonnes attendues et le statut des informations.", "Allonger toutes les consignes.", "Demander un ton plus créatif."], answer: 1, debrief: "Le type de contenu change les critères de réussite. Le prompt doit surtout rendre le livrable attendu vérifiable." },
+  2: { title: "Itérer utilement", question: "Après une V1 correcte mais incomplète, quelle demande d’itération est la plus efficace ?", options: ["Améliore ce mail et rends-le plus professionnel.", "Réécris tout avec un style plus impactant.", "Conserve les faits confirmés, raccourcis l’introduction et ajoute une check-list de trois points sans inventer d’information.", "Ajoute toutes les informations pratiques attendues par les managers."], answer: 2, debrief: "Une bonne itération cible le changement attendu et rappelle les limites. Ici, la checklist aide l’action, mais elle ne doit pas créer de lien, horaire ou date limite absents des sources." },
   3: { title: "Décision humaine", question: "Un output contient une date non présente dans la source. Quelle décision est la plus appropriée ?", options: ["Le diffuser : la date paraît plausible.", "La conserver mais demander à l’IA de la justifier.", "La marquer comme non justifiée, demander confirmation et corriger l’output.", "Réécrire l’ensemble du prompt."], answer: 2, debrief: "L’IA peut aider à détecter un écart ; elle ne transforme pas une information absente en fait confirmé. La validation reste humaine." },
 };
 
