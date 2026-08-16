@@ -1,35 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-type Space = "mission" | "diagnostic" | "lab" | "iteration" | "quality" | "challenge";
+type Step = "mission" | "sources" | "production" | "image" | "iteration" | "control" | "challenge" | "capitalisation";
 type Decision = "Exploitable" | "À corriger ou vérifier" | "À ne pas diffuser" | "";
 type DiagnosticChoice = "confirmé" | "à clarifier" | "ne pas inventer" | "";
-type PromptTemplate = { id: string; name: string; text: string };
+type ImageClass = "utile" | "vague" | "décorative" | "";
 
 const workshopIntroVideoUrl = "https://www.youtube.com/embed/Z-heGBuUrh0";
 
-const promptExamples: PromptTemplate[] = [
-  {
-    id: "example-source",
-    name: "Production fiable à partir de sources",
-    text: "À partir uniquement de {{source validée}}, rédige {{livrable}} pour {{public}}.\n\nObjectif : {{objectif}}.\nContraintes : {{contraintes}}.\n\nN’invente aucune information absente. Avant de rédiger, liste ce qui doit être confirmé : {{informations manquantes}}.",
-  },
-  {
-    id: "example-control",
-    name: "Contrôle d’un output",
-    text: "Contrôle {{output}} uniquement au regard de {{sources}}. Pour chaque écart, indique : extrait, fait à vérifier, risque et correction possible. Distingue les informations confirmées des informations absentes. Ne prends pas la décision finale à ma place.",
-  },
+const steps: { id: Step; label: string; number: string }[] = [
+  { id: "mission", label: "Mission", number: "01" },
+  { id: "sources", label: "Texte & sources", number: "02" },
+  { id: "production", label: "Production", number: "03" },
+  { id: "image", label: "Image", number: "04" },
+  { id: "iteration", label: "Itération", number: "05" },
+  { id: "control", label: "Contrôle", number: "06" },
+  { id: "challenge", label: "Challenge métier", number: "07" },
+  { id: "capitalisation", label: "Capitaliser", number: "08" },
 ];
 
-const spaces: { id: Space; label: string; number: string }[] = [
-  { id: "mission", label: "Mission", number: "01" },
-  { id: "diagnostic", label: "Diagnostic", number: "02" },
-  { id: "lab", label: "Prompt Lab", number: "03" },
-  { id: "iteration", label: "Studio d’itération", number: "04" },
-  { id: "quality", label: "Quality Check", number: "05" },
-  { id: "challenge", label: "Challenge final", number: "06" },
+const sourceFacts = [
+  "12 managers volontaires, nommés depuis moins de 18 mois.",
+  "Du 6 octobre au 14 novembre 2026 ; charge estimée : 2 h 15.",
+  "Un atelier collectif à distance de 90 minutes et un échange de pratiques de 45 minutes en quatrième semaine.",
+  "Objectif : préparer un rituel d’équipe de 30 minutes et formuler un retour constructif.",
+  "Participation volontaire ; accord du responsable hiérarchique nécessaire.",
+  "Le pilote n’est ni certifiant, ni obligatoire, ni lié à l’évaluation de la performance.",
 ];
+
+const sourceBlock = sourceFacts.map((fact) => "- " + fact).join("\n");
 
 const diagnosticItems = [
   "Un pilote Cap Managers est prévu du 6 octobre au 14 novembre 2026.",
@@ -45,211 +45,285 @@ const diagnosticDebrief = [
   { status: "confirmé", reason: "La note précise les deux séquences et leurs durées." },
   { status: "à clarifier", reason: "Ces informations seraient utiles dans l’email, mais ni le lien ni la date limite ne figurent dans les sources." },
   { status: "à clarifier", reason: "Le contact et les modalités techniques peuvent être nécessaires, mais ils ne sont pas fournis." },
-  { status: "ne pas inventer", reason: "La note dit explicitement que la participation est volontaire." },
+  { status: "ne pas inventer", reason: "La note indique explicitement que la participation est volontaire." },
   { status: "ne pas inventer", reason: "La note exclut le caractère certifiant et le lien avec l’évaluation de la performance." },
 ];
 
-const sourceFacts = [
-  "12 managers volontaires, nommés depuis moins de 18 mois.",
-  "Du 6 octobre au 14 novembre 2026 ; charge estimée : 2 h 15.",
-  "Un atelier collectif à distance de 90 minutes et un échange de pratiques de 45 minutes en quatrième semaine.",
-  "Objectif : préparer un rituel d’équipe de 30 minutes et formuler un retour constructif.",
-  "Participation volontaire ; accord du responsable hiérarchique nécessaire.",
-  "Le pilote n’est ni certifiant, ni obligatoire, ni lié à l’évaluation de la performance.",
+const sampleV1 = [
+  "Objet : Inscrivez-vous au programme certifiant Cap Managers",
+  "",
+  "Bonjour,",
+  "",
+  "HelioTech lance Cap Managers, un programme obligatoire destiné à tous les managers. À partir du 6 octobre, vous participerez à plusieurs sessions animées par nos experts, avec un atelier collectif, un coaching individuel et des échanges réguliers.",
+  "",
+  "Ce parcours certifiant sera pris en compte dans votre évaluation annuelle. Merci de vous inscrire avant le 30 septembre sur le portail interne.",
+].join("\n");
+
+const iterationPromptTemplate = [
+  "Reprends la V1 ci-dessous.",
+  "Conserve uniquement les informations confirmées dans les sources.",
+  "Raccourcis l’introduction à deux phrases.",
+  "Rends explicites l’objectif du programme, le caractère volontaire de la participation et la nécessité de l’accord du responsable hiérarchique.",
+  "Ajoute à la fin une check-list « Avant de vous inscrire », limitée à trois points et uniquement à partir des informations disponibles.",
+  "Ne crée ni lien, ni date limite, ni modalités techniques absents des sources.",
+  "Fournis une V2 complète de l’email.",
+  "",
+  "Sources :",
+  sourceBlock,
+  "",
+  "V1 à améliorer :",
+  "[coller ici la V1]",
+].join("\n");
+
+const v2Example = [
+  "Objet : Cap Managers — pilote pour managers récemment nommés",
+  "",
+  "Bonjour,",
+  "",
+  "HelioTech Services prépare le lancement de Cap Managers, un pilote destiné à 12 managers volontaires nommés depuis moins de 18 mois. L’objectif est de vous aider à préparer un rituel d’équipe de 30 minutes et à formuler un retour constructif.",
+  "",
+  "Le pilote se déroulera du 6 octobre au 14 novembre 2026. Il comprend un atelier collectif à distance de 90 minutes et un échange de pratiques de 45 minutes en quatrième semaine, pour une charge estimée à 2 h 15.",
+  "",
+  "Avant de vous inscrire :",
+  "- vérifier que vous êtes volontaire pour participer au pilote ;",
+  "- obtenir l’accord de votre responsable hiérarchique ;",
+  "- noter que les modalités pratiques d’inscription restent à confirmer.",
+].join("\n");
+
+const imageStartPrompt = "Crée le portrait professionnel fictif d’une femme dans un bureau.";
+const imageLevers = [
+  { id: "framing", label: "Plan poitrine, regard caméra, à hauteur des yeux", group: "Cadrage" },
+  { id: "light", label: "Lumière naturelle douce depuis la gauche de l’image", group: "Lumière" },
+  { id: "lens", label: "Focale portrait et profondeur de champ modérée", group: "Optique" },
+  { id: "skin", label: "Texture de peau naturelle, imperfections discrètes, sans effet plastique", group: "Réalisme" },
+  { id: "setting", label: "Bureau crédible, sobre, sans éléments parasites", group: "Environnement" },
+  { id: "mood", label: "Ambiance éditoriale, rassurante et accessible", group: "Intention" },
 ];
 
-const sourceBlock = sourceFacts.map((fact) => "- " + fact).join("\n");
-
-const v1Lines = [
-  "Inscrivez-vous vite à Cap Managers, le programme certifiant pour tous les managers.",
-  "Dès le 6 octobre, vous participerez à plusieurs sessions animées par nos experts.",
-  "Le parcours certifiant comprend un atelier collectif, un coaching individuel et des échanges réguliers.",
-  "Inscrivez-vous avant le 30 septembre sur le portail interne.",
-  "Votre participation sera prise en compte dans votre évaluation annuelle.",
+const imageStatements = [
+  { text: "Make it amazing, masterpiece, stunning, best quality", expected: "décorative" as ImageClass },
+  { text: "Soft natural window light from camera left", expected: "utile" as ImageClass },
+  { text: "85mm portrait lens, eye-level framing, shallow depth of field", expected: "utile" as ImageClass },
+  { text: "Make it professional", expected: "vague" as ImageClass },
+  { text: "Natural skin texture, subtle imperfections, realistic pores, no plastic skin", expected: "utile" as ImageClass },
 ];
 
-const sampleV1 = `Objet : Inscrivez-vous au programme certifiant Cap Managers
+type AppState = {
+  activeStep: Step;
+  role: "pilote" | "challenger";
+  diagnostic: DiagnosticChoice[];
+  diagnosticReviewed: boolean;
+  diagnosticQuestion: string;
+  productionStage: number;
+  productionObjective: string;
+  productionSources: string;
+  productionConstraints: string;
+  productionFormat: string;
+  productionRole: string;
+  productionPrompt: string;
+  productionV1: string;
+  imageStage: number;
+  imageObservation: string;
+  imageClassifications: ImageClass[];
+  imageLevers: string[];
+  imagePrompt: string;
+  imageCompare: string;
+  imageParameter: string;
+  imagePrediction: string;
+  iterationKeep: string;
+  iterationModify: string;
+  iterationVerify: string;
+  iterationPrompt: string;
+  iterationRevealed: boolean;
+  iteratedOutput: string;
+  controlPrompt: string;
+  qualityDecision: Decision;
+  challengeStage: number;
+  challengeAnonymized: boolean;
+  finalNeed: string;
+  finalSources: string;
+  finalUnknowns: string;
+  finalPrompt: string;
+  finalOutput: string;
+  finalControl: string;
+  finalDecision: Decision;
+  nextAction: string;
+  methodStable: string;
+  methodVariable: string;
+  methodControl: string;
+  methodHuman: string;
+  methodName: string;
+  methodSkillRevealed: boolean;
+};
 
-Bonjour,
+type UpdateApp = <K extends keyof AppState>(key: K, value: AppState[K]) => void;
+type GoTo = (step: Step) => void;
 
-HelioTech lance Cap Managers, un programme obligatoire destiné à tous les managers. À partir du 6 octobre, vous participerez à plusieurs sessions animées par nos experts, avec un atelier collectif, un coaching individuel et des échanges réguliers.
-
-Ce parcours certifiant sera pris en compte dans votre évaluation annuelle. Merci de vous inscrire avant le 30 septembre sur le portail interne.
-
-Cordialement,`;
-
-const iterationFeedback = `Le message est clair, mais un manager doit comprendre immédiatement ce qu’il va travailler, ce qui est attendu de lui et que la participation est volontaire. Raccourcis l’introduction et ajoute, en fin de message, une check-list “Avant de vous inscrire” de trois points maximum. N’invente aucune information absente des sources.`;
-
-const iterationPromptTemplate = `Reprends la V1 ci-dessous.
-Conserve uniquement les informations confirmées dans les sources.
-Raccourcis l’introduction à deux phrases.
-Rends explicites l’objectif du programme, le caractère volontaire de la participation et la nécessité de l’accord du responsable hiérarchique.
-Ajoute à la fin une check-list intitulée « Avant de vous inscrire », limitée à trois points, uniquement à partir des informations disponibles.
-Ne crée ni lien, ni date limite, ni modalités techniques absents des sources.
-Fournis une V2 complète de l’email.
-
-Sources :
-${sourceBlock}
-
-V1 à améliorer :
-[coller ici la V1]`;
-
-const v2Example = `Objet : Cap Managers — pilote pour managers récemment nommés
-
-Bonjour,
-
-HelioTech Services prépare le lancement de Cap Managers, un pilote destiné à 12 managers volontaires nommés depuis moins de 18 mois. L’objectif est de vous aider à préparer un rituel d’équipe de 30 minutes et à formuler un retour constructif.
-
-Le pilote se déroulera du 6 octobre au 14 novembre 2026. Il comprend un atelier collectif à distance de 90 minutes et un échange de pratiques de 45 minutes en quatrième semaine, pour une charge estimée à 2 h 15.
-
-Avant de vous inscrire :
-- vérifier que vous êtes volontaire pour participer au pilote ;
-- obtenir l’accord de votre responsable hiérarchique ;
-- noter que les modalités pratiques d’inscription restent à confirmer.
-
-À confirmer avant diffusion : lien d’inscription, date limite, contact et modalités techniques de connexion.`;
-
-const qualityRows = [
-  ["Tous les managers s’inscrivent sur le portail interne", "public, portail, date limite"],
-  ["Session en visioconférence le 6 octobre à 9 h 30", "horaire"],
-  ["Obtenir la certification Cap Managers", "certification"],
-  ["Enquête utilisée pour l’évaluation annuelle", "usage du retour d’expérience"],
-  ["Participer à un échange entre pairs en quatrième semaine", "aucun"],
-];
-
-const emptyApp = {
-  activeSpace: "mission" as Space,
+const emptyApp: AppState = {
+  activeStep: "mission",
   role: "pilote",
-  diagnostic: diagnosticItems.map(() => "" as DiagnosticChoice),
-  diagnosticVersion: 3,
+  diagnostic: diagnosticItems.map(() => ""),
   diagnosticReviewed: false,
-  diagnosticAiOutput: "",
-  diagnosticAiLearning: "",
-  questions: "",
-  contentType: "Email aux managers",
-  objective: "",
-  audience: "",
-  sources: "",
-  rolePrompt: "",
-  constraints: "",
-  format: "",
-  unknowns: "",
-  prompt: "",
-  pastedOutput: "",
-  iteratedOutput: "",
-  annotations: v1Lines.map(() => false),
-  keep: "",
-  change: "",
-  verify: "",
+  diagnosticQuestion: "",
+  productionStage: 0,
+  productionObjective: "",
+  productionSources: "",
+  productionConstraints: "",
+  productionFormat: "",
+  productionRole: "",
+  productionPrompt: "",
+  productionV1: "",
+  imageStage: 0,
+  imageObservation: "",
+  imageClassifications: imageStatements.map(() => ""),
+  imageLevers: [],
+  imagePrompt: "",
+  imageCompare: "",
+  imageParameter: "",
+  imagePrediction: "",
+  iterationKeep: "",
+  iterationModify: "",
+  iterationVerify: "",
   iterationPrompt: "",
-  quality: qualityRows.map(() => "" as Decision),
-  qualityDecision: "" as Decision,
+  iterationRevealed: false,
+  iteratedOutput: "",
   controlPrompt: "",
-  finalCase: "",
+  qualityDecision: "",
+  challengeStage: 0,
+  challengeAnonymized: false,
+  finalNeed: "",
   finalSources: "",
   finalUnknowns: "",
   finalPrompt: "",
   finalOutput: "",
   finalControl: "",
-  finalDecision: "" as Decision,
+  finalDecision: "",
   nextAction: "",
-  promptLibrary: [] as PromptTemplate[],
-  libraryName: "",
-  challengeAnonymized: false,
   methodStable: "",
   methodVariable: "",
   methodControl: "",
   methodHuman: "",
   methodName: "",
-  methodWhen: "",
-  methodInputs: "",
-  methodInstructions: "",
-  methodSources: "",
-  methodSteps: "",
-  methodQuality: "",
-  methodValidation: "",
   methodSkillRevealed: false,
 };
 
+function buildProductionPrompt(app: AppState) {
+  const lines = [
+    app.productionRole.trim() ? "Adopte ce point de vue seulement s’il apporte un vocabulaire ou un regard utile : " + app.productionRole.trim() + "." : "",
+    "À partir uniquement des sources autorisées, produis le contenu demandé.",
+    "",
+    "Objectif : " + (app.productionObjective.trim() || "Présenter le pilote Cap Managers sans inventer les informations absentes."),
+    "",
+    "Contexte et sources autorisées :",
+    app.productionSources.trim() || sourceBlock,
+    "",
+    "Contraintes et limites :",
+    app.productionConstraints.trim() || "Utilise uniquement les faits confirmés. Signale les informations manquantes. Ne présente pas le pilote comme obligatoire, certifiant ou lié à l’évaluation.",
+    "",
+    "Format attendu : " + (app.productionFormat.trim() || "Un email court avec objet, corps de message et mentions à confirmer si nécessaire."),
+    "",
+    "Ne complète aucune information absente des sources. Si un point manque, signale-le clairement au lieu de l’inventer.",
+  ];
+  return lines.filter((line, index) => line || index > 0).join("\n");
+}
+
+function buildImagePrompt(app: AppState) {
+  const selected = imageLevers.filter((lever) => app.imageLevers.includes(lever.id)).map((lever) => lever.label);
+  return [
+    "Create a fictional professional editorial portrait of a woman in a credible office.",
+    "Purpose: a reassuring, contemporary professional profile image.",
+    selected.length ? "Visual choices: " + selected.join("; ") + "." : "Choose only the visual details that serve the intended use.",
+    "Do not imitate a real person, do not add text, logos or distorted features.",
+  ].join("\n");
+}
+
+function buildControlPrompt(app: AppState) {
+  return [
+    "Contrôle le contenu ci-dessous uniquement au regard des sources fournies.",
+    "",
+    "Pour chaque affirmation importante, indique si elle est :",
+    "- confirmée par les sources ;",
+    "- à vérifier car absente ou insuffisamment précise ;",
+    "- contradictoire avec les sources.",
+    "",
+    "Signale les informations absentes qui peuvent empêcher la diffusion.",
+    "Ne réécris pas le contenu.",
+    "Ne prends pas la décision finale de diffusion : cette décision reste humaine.",
+    "",
+    "Sources :",
+    sourceBlock,
+    "",
+    "Contenu à contrôler :",
+    app.iteratedOutput.trim() || "[coller ici la V2]",
+  ].join("\n");
+}
+
+function migrateSaved(saved: Record<string, unknown>): AppState {
+  const oldSteps: Record<string, Step> = {
+    mission: "mission",
+    diagnostic: "sources",
+    lab: "production",
+    iteration: "iteration",
+    quality: "control",
+    challenge: "challenge",
+  };
+  const active = typeof saved.activeStep === "string" ? saved.activeStep as Step : oldSteps[String(saved.activeSpace)] || "mission";
+  return {
+    ...emptyApp,
+    ...saved,
+    activeStep: steps.some((step) => step.id === active) ? active : "mission",
+    diagnostic: Array.isArray(saved.diagnostic) ? diagnosticItems.map((_, index) => saved.diagnostic?.[index] as DiagnosticChoice || "") : emptyApp.diagnostic,
+    diagnosticQuestion: String(saved.diagnosticQuestion || saved.questions || ""),
+    productionObjective: String(saved.productionObjective || saved.objective || ""),
+    productionSources: String(saved.productionSources || saved.sources || ""),
+    productionConstraints: String(saved.productionConstraints || saved.constraints || ""),
+    productionFormat: String(saved.productionFormat || saved.format || ""),
+    productionRole: String(saved.productionRole || saved.rolePrompt || ""),
+    productionPrompt: String(saved.productionPrompt || saved.prompt || ""),
+    productionV1: String(saved.productionV1 || saved.pastedOutput || ""),
+    finalNeed: String(saved.finalNeed || saved.finalCase || ""),
+    finalSources: String(saved.finalSources || ""),
+    finalUnknowns: String(saved.finalUnknowns || ""),
+    finalPrompt: String(saved.finalPrompt || ""),
+    finalOutput: String(saved.finalOutput || ""),
+    finalControl: String(saved.finalControl || ""),
+  };
+}
+
+function copyText(text: string) {
+  navigator.clipboard?.writeText(text);
+}
+
 export default function Home() {
-  const [app, setApp] = useState(emptyApp);
-  const [resourcesOpen, setResourcesOpen] = useState(false);
-  const [quiz, setQuiz] = useState<number | null>(null);
-  const [quizAnswer, setQuizAnswer] = useState<string>("");
+  const [app, setApp] = useState<AppState>(emptyApp);
   const [hydrated, setHydrated] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [playgroundOpen, setPlaygroundOpen] = useState(false);
+  const [quiz, setQuiz] = useState<number | null>(null);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("prompt-studio-v1");
-    if (saved) {
+    const raw = window.localStorage.getItem("prompt-studio-v2") || window.localStorage.getItem("prompt-studio-v1");
+    if (raw) {
       try {
-        const savedApp = JSON.parse(saved);
-        setApp({
-          ...emptyApp,
-          ...savedApp,
-          diagnostic: savedApp.diagnosticVersion === 3 && Array.isArray(savedApp.diagnostic)
-            ? diagnosticItems.map((_, index) => savedApp.diagnostic[index] || "")
-            : emptyApp.diagnostic,
-          diagnosticVersion: 3,
-        });
+        // The browser is the source of truth for this explicitly local workshop state.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setApp(migrateSaved(JSON.parse(raw)));
       } catch {
-        window.localStorage.removeItem("prompt-studio-v1");
+        window.localStorage.removeItem("prompt-studio-v2");
       }
     }
     setHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (hydrated) {
-      window.localStorage.setItem("prompt-studio-v1", JSON.stringify(app));
-    }
+    if (hydrated) window.localStorage.setItem("prompt-studio-v2", JSON.stringify(app));
   }, [app, hydrated]);
 
-  const update = <K extends keyof typeof emptyApp>(key: K, value: (typeof emptyApp)[K]) =>
-    setApp((current) => ({ ...current, [key]: value }));
-
-  const go = (activeSpace: Space) => {
-    update("activeSpace", activeSpace);
+  const update = <K extends keyof AppState>(key: K, value: AppState[K]) => setApp((current) => ({ ...current, [key]: value }));
+  const go = (step: Step) => {
+    update("activeStep", step);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-  const proposedPrompt = useMemo(() => {
-    return `${app.rolePrompt ? `Adopte le point de vue suivant, seulement s’il aide réellement : ${app.rolePrompt}.\n\n` : ""}À partir uniquement des sources autorisées ci-dessous, prépare une première version d’email.
-
-Objectif : ${app.objective || "Présenter le pilote Cap Managers aux managers concernés sans inventer les informations absentes."}
-Public : ${app.audience || "Managers volontaires récemment nommés"}
-Sources autorisées :
-${app.sources || sourceBlock}
-
-Contraintes utiles :
-${app.constraints || "- Utiliser uniquement les faits confirmés.\n- Signaler les informations manquantes.\n- Ne pas présenter le pilote comme obligatoire, certifiant ou lié à l’évaluation."}
-
-Format attendu : ${app.format || "Email court avec objet, corps de message et section À confirmer avant diffusion si nécessaire."}
-
-Ne complète aucune information absente des sources. Avant la réponse finale, liste les éléments à confirmer : ${app.unknowns || "[informations manquantes à signaler]"}.`;
-  }, [app]);
-
-  const controlPrompt = useMemo(
-    () =>
-      `Contrôle l’email ci-dessous uniquement au regard des sources fournies.
-
-Pour chaque affirmation importante, indique :
-- confirmée par les sources ;
-- à vérifier car absente ou insuffisamment précise ;
-- contradictoire avec les sources.
-
-Signale les informations absentes qui peuvent empêcher la diffusion.
-Ne réécris pas l’email.
-Ne prends pas la décision finale de diffusion : cette décision reste humaine.
-
-Sources :
-${sourceBlock}
-
-Email à contrôler :
-[coller ici la V2]`,
-    [],
-  );
-
-  const exportSheet = () => window.print();
 
   return (
     <main className="app-shell">
@@ -258,30 +332,32 @@ Email à contrôler :
           <span className="brand-mark">P</span>
           <span>Prompt Studio <small>atelier guidé</small></span>
         </button>
-        <button className="resource-button" onClick={() => setResourcesOpen(true)}>Ressources</button>
+        <div className="header-actions">
+          <button className="quiet-button" onClick={() => setPlaygroundOpen(true)}>Expériences facultatives</button>
+          <button className="quiet-button" onClick={() => setResourcesOpen(true)}>Pour aller plus loin</button>
+        </div>
       </header>
 
-      <nav className="stepper" aria-label="Progression de l’atelier">
-        {spaces.map((space) => (
-          <button
-            key={space.id}
-            className={app.activeSpace === space.id ? "active" : ""}
-            onClick={() => go(space.id)}
-          >
-            <span>{space.number}</span>{space.label}
+      <nav className="compact-nav" aria-label="Parcours principal">
+        {steps.map((step) => (
+          <button key={step.id} className={app.activeStep === step.id ? "active" : ""} onClick={() => go(step.id)}>
+            <span>{step.number}</span>{step.label}
           </button>
         ))}
       </nav>
 
-      {app.activeSpace === "mission" && <Mission app={app} update={update} go={go} openQuiz={() => { setQuiz(0); setQuizAnswer(""); }} />}
-      {app.activeSpace === "diagnostic" && <Diagnostic app={app} update={update} go={go} />}
-      {app.activeSpace === "lab" && <PromptLab app={app} update={update} proposedPrompt={proposedPrompt} go={go} openQuiz={() => { setQuiz(2); setQuizAnswer(""); }} />}
-      {app.activeSpace === "iteration" && <Iteration app={app} update={update} go={go} />}
-      {app.activeSpace === "quality" && <QualityCheck app={app} update={update} controlPrompt={controlPrompt} go={go} openQuiz={() => { setQuiz(3); setQuizAnswer(""); }} />}
-      {app.activeSpace === "challenge" && <Challenge app={app} update={update} exportSheet={exportSheet} />}
+      {app.activeStep === "mission" && <Mission app={app} update={update} go={go} openQuiz={() => setQuiz(0)} />}
+      {app.activeStep === "sources" && <Sources app={app} update={update} go={go} />}
+      {app.activeStep === "production" && <Production app={app} update={update} go={go} />}
+      {app.activeStep === "image" && <ImageLab app={app} update={update} go={go} />}
+      {app.activeStep === "iteration" && <Iteration app={app} update={update} go={go} />}
+      {app.activeStep === "control" && <Control app={app} update={update} go={go} openQuiz={() => setQuiz(2)} />}
+      {app.activeStep === "challenge" && <Challenge app={app} update={update} go={go} />}
+      {app.activeStep === "capitalisation" && <Capitalisation app={app} update={update} exportSheet={() => window.print()} />}
 
-      {resourcesOpen && <Resources onClose={() => setResourcesOpen(false)} />}
-      {quiz !== null && <Quiz id={quiz} answer={quizAnswer} setAnswer={setQuizAnswer} onClose={() => setQuiz(null)} />}
+      {resourcesOpen && <Resources step={app.activeStep} onClose={() => setResourcesOpen(false)} />}
+      {playgroundOpen && <Playground onClose={() => setPlaygroundOpen(false)} />}
+      {quiz !== null && <Quiz id={quiz} onClose={() => setQuiz(null)} />}
 
       <footer>
         <span>Frédéric Legrand</span><span>·</span>
@@ -293,204 +369,406 @@ Email à contrôler :
   );
 }
 
-function Mission({ app, update, go, openQuiz }: any) {
-  return <section className="hero-page mission-page">
-    <p className="eyebrow">ATELIER SYNCHRONE · 3 H 30</p>
+function Mission({ app, update, go, openQuiz }: { app: AppState; update: UpdateApp; go: GoTo; openQuiz: () => void }) {
+  return <section className="hero-page">
+    <p className="eyebrow">ATELIER GUIDÉ</p>
     <h1>Du besoin flou<br /><em>à l’output maîtrisé.</em></h1>
-    <p className="lead">Un atelier de pratique : diagnostiquer, prompter, dialoguer, itérer et contrôler — sans chercher un prompt parfait.</p>
+    <p className="lead">Un studio d’expérimentation pour comprendre, prompter, tester, itérer, contrôler et réutiliser.</p>
     <div className="mission-card">
-      <div><span className="kicker">MISSION COMMUNE</span><h2>HelioTech Services · Cap Managers</h2><p>Préparer un email fiable à partir de données incomplètes, sans inventer ce que les sources ne disent pas.</p></div>
-      <div className="role-choice"><span>Votre premier rôle</span><div><button className={app.role === "pilote" ? "chosen" : ""} onClick={() => update("role", "pilote")}>Pilote</button><button className={app.role === "challenger" ? "chosen" : ""} onClick={() => update("role", "challenger")}>Challenger</button></div><small>Les rôles alterneront pendant l’atelier.</small></div>
+      <div>
+        <span className="kicker">MISSION COMMUNE</span>
+        <h2>HelioTech Services · Cap Managers</h2>
+        <p>Préparer un email fiable à partir de données incomplètes, sans inventer ce que les sources ne disent pas.</p>
+      </div>
+      <div className="role-choice">
+        <span>Premier rôle dans le binôme</span>
+        <div>
+          <button className={app.role === "pilote" ? "chosen" : ""} onClick={() => update("role", "pilote")}>Pilote</button>
+          <button className={app.role === "challenger" ? "chosen" : ""} onClick={() => update("role", "challenger")}>Challenger</button>
+        </div>
+        <small>Les rôles peuvent s’inverser à tout moment.</small>
+      </div>
     </div>
-    <div className="principles"><span>Prompt</span><i>→</i><span>Dialogue</span><i>→</i><span>Itération</span><i>→</i><span>Contrôle</span></div>
-    <div className="preflight-grid">
-      <article className="notion-card"><span className="kicker">REPÈRE AVANT L’EXERCICE</span><h2>Deux documents, deux fonctions.</h2><div className="document-roles"><p><b>A · Demande reçue</b><br />Elle exprime le besoin et l’intention. Elle peut être imprécise.</p><p><b>B · Note validée</b><br />Elle contient les faits que l’on peut réellement utiliser.</p></div><p className="notion-note">Une absence n’est pas un détail à combler : elle devient une question, une mention provisoire ou une limite explicite.</p></article>
+    <div className="mission-grid">
+      <article className="notion-card">
+        <span className="kicker">LE REPÈRE DU JOUR</span>
+        <h2>Une IA ne connaît ni votre contexte, ni vos limites.</h2>
+        <p>Elle peut produire une réponse convaincante, mais ne peut pas décider seule ce qui est exact, autorisé ou diffusable.</p>
+        <button className="text-button" onClick={openQuiz}>Mini-défi : demande ou source ?</button>
+      </article>
       <article className="video-card">
         <span className="kicker">CAPSULE DE LANCEMENT</span>
-        {workshopIntroVideoUrl ? <iframe src={workshopIntroVideoUrl} title="Présentation de l’exercice HelioTech" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : <div className="video-placeholder"><b>▶</b><div><strong>Votre vidéo d’introduction apparaîtra ici.</strong><span>Format conseillé : 2 à 3 minutes pour présenter le défi, l’intérêt de l’exercice et le rôle du binôme.</span></div></div>}
+        <iframe src={workshopIntroVideoUrl} title="Présentation de l’exercice HelioTech" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
       </article>
     </div>
-    <div className="mission-actions"><button className="soft" onClick={openQuiz}>Micro-quiz · demande ou source ?</button><button className="primary" onClick={() => go("diagnostic")}>Ouvrir les documents A et B <span>→</span></button></div>
+    <div className="action-row">
+      <span>Le parcours principal avance par expériences courtes. Les aides apparaissent seulement au moment utile.</span>
+      <button className="primary" onClick={() => go("sources")}>Entrer dans le Lab texte <span>→</span></button>
+    </div>
   </section>;
 }
 
-function Diagnostic({ app, update, go }: any) {
+function Sources({ app, update, go }: { app: AppState; update: UpdateApp; go: GoTo }) {
   const cycle = (index: number) => {
     const order: DiagnosticChoice[] = ["", "confirmé", "à clarifier", "ne pas inventer"];
     const next = order[(order.indexOf(app.diagnostic[index]) + 1) % order.length];
-    const diagnostic = diagnosticItems.map((_, current) => app.diagnostic[current] || ""); diagnostic[index] = next; update("diagnostic", diagnostic); update("diagnosticReviewed", false);
+    const diagnostic = [...app.diagnostic];
+    diagnostic[index] = next;
+    update("diagnostic", diagnostic);
+    update("diagnosticReviewed", false);
   };
-  const byStatus = (status: DiagnosticChoice) => diagnosticItems.filter((_, index) => app.diagnostic[index] === status);
-  const confirmed = byStatus("confirmé");
-  const unclear = byStatus("à clarifier");
-  const blocked = byStatus("ne pas inventer");
-  const cleanPrompt = `Rôle possible :
-Tu peux agir comme assistant de rédaction professionnelle, seulement si cela aide à structurer le message.
-
-Objectif :
-Rédiger un email court, clair et professionnel pour présenter le pilote Cap Managers aux managers concernés.
-
-Contexte :
-HelioTech Services prépare le lancement de Cap Managers. La demande reçue souhaite un message dynamique et utile, mais la rédaction doit rester strictement appuyée sur la note validée.
-
-Sources autorisées :
-${sourceBlock}
-
-Faits confirmés repérés pendant le diagnostic :
-${confirmed.length ? confirmed.map((item) => "- " + item).join("\n") : "- [à compléter à partir des cartes classées confirmé]"}
-
-Informations à clarifier avant diffusion :
-${[...unclear, app.questions.trim()].filter(Boolean).map((item) => "- " + item).join("\n") || "- [à compléter : inscription, contact, modalités, horaire, critères éventuels]"}
-
-Limites à respecter :
-${blocked.length ? blocked.map((item) => "- Ne pas affirmer que " + item.charAt(0).toLowerCase() + item.slice(1)).join("\n") : "- Ne pas inventer d’information absente ou contraire aux sources."}
-- Si une information manque, la signaler entre crochets ou proposer une formulation provisoire.
-- Ne pas présenter le pilote comme obligatoire, certifiant ou lié à l’évaluation de la performance.
-
-Format attendu :
-Propose un email avec un objet, un corps de message court et une section finale “À confirmer avant diffusion” si nécessaire.`;
-  const sendToLab = () => {
-    update("contentType", "Email aux managers");
-    update("objective", "Présenter le pilote Cap Managers aux managers concernés sans inventer les informations absentes.");
-    update("audience", "Managers volontaires récemment nommés");
-    update("sources", sourceBlock);
-    update("constraints", "Utiliser uniquement les faits confirmés. Signaler les informations manquantes. Ne pas présenter le pilote comme obligatoire, certifiant ou lié à l’évaluation.");
-    update("format", "Email court avec objet, corps de message et section À confirmer avant diffusion si nécessaire.");
-    update("unknowns", [app.questions.trim(), ...unclear].filter(Boolean).join("\n"));
-    update("prompt", cleanPrompt);
-    go("lab");
-  };
-  return <section className="page-grid diagnostic-page">
-    <div className="page-heading"><p className="eyebrow">02 · DIAGNOSTIC EXPRESS</p><h1>Avant le prompt, poser les bonnes limites.</h1><p>Cette séquence prépare le prompt que vous testerez ensuite dans votre IA autorisée : on nettoie d’abord les données, puis seulement on demande à l’IA de produire.</p></div>
-    <div className="two-col source-layout">
-      <article className="document dark"><span>DOCUMENT A · DEMANDE REÇUE</span><p>« Nous devons communiquer rapidement sur Cap Managers. Il faudrait un message qui donne envie aux managers de participer, et une fiche courte pour suivre le lancement. Nous avons une note, mais il faut que ce soit clair, professionnel et dynamique. »</p></article>
-      <article className="document"><span>DOCUMENT B · NOTE VALIDÉE</span><ul>{sourceFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul></article>
+  return <section className="page-grid">
+    <PageHeading eyebrow="LAB TEXTE · SOURCES" title="Avant le prompt, décider ce qui est fiable." text="La demande exprime une intention. La note validée contient les faits utilisables. Votre première tâche : ne pas confondre les deux." />
+    <div className="two-col">
+      <article className="document dark">
+        <span>DOCUMENT A · DEMANDE REÇUE</span>
+        <p>« Nous devons communiquer rapidement sur Cap Managers. Il faudrait un message qui donne envie aux managers de participer, et une fiche courte pour suivre le lancement. Nous avons une note, mais il faut que ce soit clair, professionnel et dynamique. »</p>
+      </article>
+      <article className="document">
+        <span>DOCUMENT B · NOTE VALIDÉE</span>
+        <ul>{sourceFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul>
+      </article>
     </div>
-    <details className="source-reminder"><summary>Revoir les documents A/B pendant le tri</summary><div><p><b>A · Demande reçue</b><br />« Nous devons communiquer rapidement sur Cap Managers… clair, professionnel et dynamique. »</p><p><b>B · Note validée</b><br />{sourceFacts.join(" · ")}</p></div></details>
-    <div className="diagnostic-brief"><div><span className="kicker">MICRO-EXERCICE · 6 MIN</span><h2>Classez les six affirmations.</h2><p>Chaque carte représente une information qui pourrait entrer dans votre prompt ou dans un output. Cliquez jusqu’au statut qui vous paraît juste, puis comparez votre raisonnement au débrief.</p></div><div className="diagnostic-legend"><span><b>Confirmé</b> : la note validée l’affirme.</span><span><b>À clarifier</b> : ce serait utile, mais l’information manque.</span><span><b>Ne pas inventer</b> : ce n’est pas justifié ou cela contredit les sources.</span></div></div>
-    <div className="diagnostic-board compact">{diagnosticItems.map((item, index) => <button key={item} className={"diagnostic-item " + app.diagnostic[index].replaceAll(" ", "-")} onClick={() => cycle(index)}><span>{index + 1}</span><p>{item}</p><em>{app.diagnostic[index] || "à classer"}</em></button>)}</div>
-    <div className="diagnostic-actions"><button className="soft" onClick={() => update("diagnosticReviewed", !app.diagnosticReviewed)}>{app.diagnosticReviewed ? "Masquer le débrief" : "Comparer mon diagnostic au débrief"}</button><span>Sans note : l’objectif est d’expliciter le raisonnement avant de construire le prompt.</span></div>
-    {app.diagnosticReviewed && <div className="diagnostic-debrief"><span className="kicker">REPÈRES DE DÉBRIEF</span>{diagnosticDebrief.map((item, index) => <div key={item.reason}><b>{index + 1} · {item.status}</b><p>{item.reason}</p></div>)}</div>}
-    <div className="questions-card"><div><span className="kicker">LE CHALLENGER QUESTIONNE</span><h2>Parmi les informations absentes, quelles sont les trois qui changeraient le plus votre prompt ou votre livrable ?</h2><p>Il y en a davantage : choisissez celles qui ont le plus d’effet sur la production en cours.</p></div><textarea value={app.questions} onChange={(e) => update("questions", e.target.value)} placeholder="Ex. Quelle modalité d’inscription doit apparaître dans l’email ?" /></div>
-    <section className="diagnostic-prompt-card"><div><span className="kicker">PROMPT PROPRE À TESTER · 8 MIN</span><h2>Vos choix deviennent une consigne exploitable.</h2><p>Le prompt ci-dessous reprend les faits validés, les limites et les informations à clarifier. Il est copiable dans l’IA autorisée, puis modifiable dans le Prompt Lab.</p><div className="diagnostic-copy-actions"><button className="copy" onClick={() => navigator.clipboard?.writeText(cleanPrompt)}>Copier le prompt propre</button><button className="soft" onClick={sendToLab}>L’envoyer dans le Prompt Lab</button></div></div><textarea readOnly value={cleanPrompt} aria-label="Prompt propre généré à partir du diagnostic" /></section>
-    <div className="action-row"><span>Vous avez maintenant une base factuelle et des limites à intégrer au prompt.</span><button className="primary" onClick={() => go("lab")}>Passer au Prompt Lab <span>→</span></button></div>
-  </section>;
-}
-
-function PromptLab({ app, update, proposedPrompt, go, openQuiz }: any) {
-  return <section className="page-grid">
-    <div className="page-heading"><p className="eyebrow">03 · PROMPT LAB</p><h1>Tester un prompt sur une vraie IA.</h1><p>Le canevas reste une aide. L’objectif est de produire une V1 réelle, puis d’observer ce que l’IA fait quand la consigne contient des faits, des limites et des inconnues.</p></div>
-    <div className="lab-layout">
-      <aside className="lab-tools"><span className="kicker">TEST RÉEL · 10 MIN</span><ol><li>Relisez le prompt issu du diagnostic.</li><li>Copiez-le dans l’IA autorisée.</li><li>Collez la V1 obtenue dans l’application.</li></ol><p>Le binôme ne cherche pas “la bonne réponse” : il observe où l’IA respecte les sources, où elle reste floue, et où elle risque d’inventer.</p></aside>
-      <div className="form-card"><div className="form-title"><span className="kicker">CANEVAS FACULTATIF</span><p>Complétez seulement ce qui aide. Le rôle n’est pas obligatoire : une bonne source et une limite claire valent souvent mieux qu’un personnage artificiel.</p></div><div className="field-grid"><Field label="Objectif" value={app.objective} onChange={(v: string) => update("objective", v)} placeholder="Ce que le contenu doit permettre" /><Field label="Public" value={app.audience} onChange={(v: string) => update("audience", v)} placeholder="Destinataire réel" /><Field label="Sources autorisées" value={app.sources} onChange={(v: string) => update("sources", v)} placeholder="Note Cap Managers validée" /><Field label="Rôle (facultatif)" value={app.rolePrompt} onChange={(v: string) => update("rolePrompt", v)} placeholder="Seulement s’il apporte un point de vue utile" /><Field label="Contraintes utiles" value={app.constraints} onChange={(v: string) => update("constraints", v)} placeholder="Ce qu’il faut respecter ou éviter" /><Field label="Format attendu" value={app.format} onChange={(v: string) => update("format", v)} placeholder="Objet + corps + action" /></div><Field label="Informations à signaler comme absentes" value={app.unknowns} onChange={(v: string) => update("unknowns", v)} placeholder="Date limite, lien, contact, modalités techniques…" /></div>
-      <div className="prompt-card"><span className="kicker">PROMPT À COPIER-COLLER</span><p>Modifiez librement le texte avant de le tester dans l’IA.</p><button className="soft full" onClick={() => update("prompt", proposedPrompt)}>Reconstruire depuis le canevas</button><textarea value={app.prompt} onChange={(e) => update("prompt", e.target.value)} placeholder="Écrivez ou adaptez votre prompt ici…" /><button className="copy" onClick={() => navigator.clipboard?.writeText(app.prompt)}>Copier le prompt pour l’IA</button></div>
-    </div>
-    <PromptLibrary app={app} update={update} />
-    <div className="output-strip"><div><span className="kicker">V1 OBTENUE DANS L’IA</span><h2>Collez le premier résultat.</h2><p>Si le modèle produit déjà une réponse propre, c’est intéressant aussi : l’exercice portera alors sur l’amélioration ciblée et le contrôle.</p></div><textarea value={app.pastedOutput} onChange={(e) => update("pastedOutput", e.target.value)} placeholder="Coller ici l’email V1 obtenu dans l’IA autorisée…" /></div>
-    <div className="action-row"><button className="soft" onClick={openQuiz}>Micro-quiz · itérer utilement</button><button className="primary" onClick={() => go("iteration")}>Ouvrir le Studio d’itération <span>→</span></button></div>
-  </section>;
-}
-
-function Iteration({ app, update, go }: any) {
-  const v1ForDisplay = app.pastedOutput.trim() || sampleV1;
-  return <section className="page-grid">
-    <div className="page-heading"><p className="eyebrow">04 · STUDIO D’ITÉRATION</p><h1>Améliorer sans repartir de zéro.</h1><p>Une itération utile ne dit pas seulement “améliore”. Elle précise ce qui change : le fond, la forme, les contraintes, puis elle vérifie que l’IA n’a pas comblé les trous.</p></div>
-    <div className="iteration-grid"><article className="v1-card"><span className="kicker">V1 À OBSERVER</span><h2>Email obtenu</h2><textarea value={v1ForDisplay} onChange={(e) => update("pastedOutput", e.target.value)} aria-label="V1 à améliorer" /><div className="v1-flags"><span>À repérer en binôme</span>{v1Lines.map((line, index) => <button key={line} className={app.annotations[index] ? "flagged" : ""} onClick={() => { const annotations = [...app.annotations]; annotations[index] = !annotations[index]; update("annotations", annotations); }}><i>{app.annotations[index] ? "!" : "○"}</i>{line}</button>)}</div></article><article className="iteration-notes"><span className="kicker">RETOUR MÉTIER</span><blockquote>{iterationFeedback}</blockquote><Field label="À conserver" value={app.keep} onChange={(v: string) => update("keep", v)} placeholder="Ex. ton clair, structure courte" /><Field label="À ajouter" value={app.change} onChange={(v: string) => update("change", v)} placeholder="Ex. checklist Avant de vous inscrire" /><Field label="À verrouiller" value={app.verify} onChange={(v: string) => update("verify", v)} placeholder="Ex. aucun lien, horaire ou délai inventé" /><textarea value={app.iterationPrompt} onChange={(e) => update("iterationPrompt", e.target.value)} placeholder="Écrivez ici l’instruction d’itération à copier dans l’IA…" /><button className="copy" onClick={() => navigator.clipboard?.writeText(app.iterationPrompt)}>Copier l’instruction</button></article><article className="v2-card"><span className="kicker">V2 APRÈS TEST</span><h2>Checklist finale, mais sobre.</h2><p>La check-list sert à rendre l’action claire. Elle doit rester courte et s’appuyer uniquement sur les sources confirmées.</p><textarea value={app.iteratedOutput} onChange={(e) => update("iteratedOutput", e.target.value)} placeholder={v2Example} /><div className="better">Critère clé : les absences restent visibles, même quand la V2 paraît fluide.</div></article></div>
-    <div className="action-row"><button className="soft" onClick={() => update("iterationPrompt", iterationPromptTemplate.replace("[coller ici la V1]", app.pastedOutput.trim() || "[coller ici la V1]"))}>Proposer l’instruction avec checklist</button><button className="primary" onClick={() => go("quality")}>Passer au Quality Check <span>→</span></button></div>
-  </section>;
-}
-
-function QualityCheck({ app, update, controlPrompt, go, openQuiz }: any) {
-  const cycle = (index: number) => { const order: Decision[] = ["", "Exploitable", "À corriger ou vérifier", "À ne pas diffuser"]; const quality = [...app.quality]; quality[index] = order[(order.indexOf(quality[index]) + 1) % order.length]; update("quality", quality); };
-  const promptToCopy = app.controlPrompt.trim() || controlPrompt.replace("[coller ici la V2]", app.iteratedOutput.trim() || "[coller ici la V2]");
-  return <section className="page-grid">
-    <div className="page-heading"><p className="eyebrow">05 · QUALITY CHECK</p><h1>Une réponse fluide n’est pas forcément exploitable.</h1><p>La décision appartient toujours à une personne. L’application aide à rendre les écarts visibles.</p></div>
-    <div className="quality-layout"><article className="quality-table"><span className="kicker">MINI-AUDIT HUMAIN</span><h2>Écarts à classer</h2><p className="quality-intro">Cliquez pour choisir le statut adapté. Ce classement prépare la décision, il ne la remplace pas.</p>{qualityRows.map(([line, issue], index) => <button key={line} className={app.quality[index].replaceAll(" ", "-").replaceAll("à", "a")} onClick={() => cycle(index)}><span>{index + 1}</span><p>{line}<small>Point à contrôler : {issue}</small></p><em>{app.quality[index] || "à examiner"}</em></button>)}</article><article className="control-card"><span className="kicker">PROMPT DE CONTRÔLE</span><p>Copiez ce prompt dans l’IA pour obtenir un diagnostic factuel de la V2. L’IA ne doit ni réécrire directement, ni décider de diffuser.</p><textarea value={app.controlPrompt} onChange={(e) => update("controlPrompt", e.target.value)} placeholder={controlPrompt.replace("[coller ici la V2]", app.iteratedOutput.trim() || "[coller ici la V2]")} /><div className="control-actions"><button className="soft" onClick={() => update("controlPrompt", controlPrompt.replace("[coller ici la V2]", app.iteratedOutput.trim() || "[coller ici la V2]"))}>Proposer le prompt de contrôle</button><button className="copy" onClick={() => navigator.clipboard?.writeText(promptToCopy)}>Copier pour l’IA</button></div><div className="human-decision"><span>Décision humaine finale</span>{(["Exploitable", "À corriger ou vérifier", "À ne pas diffuser"] as Decision[]).map((item) => <button key={item} className={app.qualityDecision === item ? "chosen" : ""} onClick={() => update("qualityDecision", item)}>{item}</button>)}</div></article></div>
-    <div className="action-row"><button className="soft" onClick={openQuiz}>Micro-quiz · décision humaine</button><button className="primary" onClick={() => go("challenge")}>Lancer le Challenge final <span>→</span></button></div>
-  </section>;
-}
-
-function Challenge({ app, update, exportSheet }: any) {
-  return <section className="page-grid challenge-page">
-    <div className="page-heading"><p className="eyebrow">06 · CHALLENGE FINAL</p><h1>Transférer la méthode dans votre métier.</h1><p>Utilisez un cas anonymisé. Si nécessaire, appuyez-vous sur le cas de secours Atelier Mistral : ateliers cybersécurité, dates et modalités pratiques volontairement incomplètes.</p></div>
-    <div className="safety-card"><div><span className="kicker">SAS CONFIDENTIALITÉ AVANT IA</span><h2>Un cas utile, pas un cas exposé.</h2><p>Avant de le coller dans l’outil autorisé, retirez les noms, coordonnées, identifiants, références de dossiers et combinaisons qui permettent de reconnaître une personne ou une organisation.</p></div><label className="privacy-check"><input type="checkbox" checked={app.challengeAnonymized} onChange={(e) => update("challengeAnonymized", e.target.checked)} /><span>Mon cas est anonymisé et l’outil choisi est autorisé.</span></label></div>
-    <div className="challenge-grid"><div className="form-card"><span className="kicker">MON CAS À TESTER</span><Field label="Besoin et livrable visé" value={app.finalCase} onChange={(v: string) => update("finalCase", v)} placeholder="Décrivez le besoin métier, pas l’outil souhaité" /><Field label="Sources autorisées" value={app.finalSources} onChange={(v: string) => update("finalSources", v)} placeholder="Documents publics, fictifs ou validés" /><Field label="Informations absentes à ne pas inventer" value={app.finalUnknowns} onChange={(v: string) => update("finalUnknowns", v)} placeholder="Ce qu’il faudra demander, signaler ou laisser à confirmer" /></div><div className="final-card"><span className="kicker">PROMPT DE PRODUCTION</span><textarea value={app.finalPrompt} onChange={(e) => update("finalPrompt", e.target.value)} placeholder="Votre prompt librement formulé…" /><span className="kicker">OUTPUT TESTÉ</span><textarea value={app.finalOutput} onChange={(e) => update("finalOutput", e.target.value)} placeholder="L’output obtenu, ou le protocole de test prévu…" /></div><div className="final-card"><span className="kicker">PROMPT DE CONTRÔLE</span><textarea value={app.finalControl} onChange={(e) => update("finalControl", e.target.value)} placeholder="Votre contrôle ciblé…" /><span className="kicker">DÉCISION HUMAINE ET PROCHAIN TEST</span><div className="decision-buttons">{(["Exploitable", "À corriger ou vérifier", "À ne pas diffuser"] as Decision[]).map((item) => <button key={item} className={app.finalDecision === item ? "chosen" : ""} onClick={() => update("finalDecision", item)}>{item}</button>)}</div><textarea value={app.nextAction} onChange={(e) => update("nextAction", e.target.value)} placeholder="Ex. tester ce prompt sur un dossier validé, puis le faire relire par…" /></div></div>
-    <section className="method-section" aria-label="Du prompt à la méthode réutilisable">
-      <div className="method-heading"><div><span className="kicker">CONCLUSION GUIDÉE · 15 MIN</span><h2>Du prompt à la méthode réutilisable.</h2><p>Transformez l’essai du jour en une manière de travailler que vous pourrez reprendre et adapter.</p></div><div className="method-question">« Si vous deviez refaire cette tâche chaque semaine, qu’auriez-vous intérêt à ne plus réexpliquer à l’IA ? »</div></div>
-      <div className="method-sort-grid">
-        <MethodArea title="Stable" hint="Ce qui ne change pas d’un cas à l’autre." value={app.methodStable} onChange={(value: string) => update("methodStable", value)} placeholder="Ex. structure attendue, ton, règles, étapes…" />
-        <MethodArea title="Variable" hint="Ce qui dépend du dossier, de la période ou du destinataire." value={app.methodVariable} onChange={(value: string) => update("methodVariable", value)} placeholder="Ex. données, public, objectif, date…" />
-        <MethodArea title="Contrôle" hint="Ce qui permet de vérifier avant diffusion." value={app.methodControl} onChange={(value: string) => update("methodControl", value)} placeholder="Ex. sources à comparer, critères, alertes…" />
-        <MethodArea title="Humain" hint="Ce qu’une personne doit décider ou assumer." value={app.methodHuman} onChange={(value: string) => update("methodHuman", value)} placeholder="Ex. arbitrage, validation, diffusion…" />
+    <details className="inline-help">
+      <summary>Besoin d’un repère ?</summary>
+      <p><b>La demande</b> aide à comprendre le besoin. <b>La note validée</b> permet de décider ce qui peut être affirmé. Une absence devient une question ou une limite, jamais un fait inventé.</p>
+    </details>
+    <section className="activity-card">
+      <span className="kicker">VOTRE ACTION</span>
+      <h2>Classez les six affirmations.</h2>
+      <p>Cliquez sur une carte jusqu’au statut qui vous paraît juste. Le binôme doit pouvoir répondre : « Quelle source le prouve ? »</p>
+      <div className="legend"><span><b>Confirmé</b> · la note validée l’affirme</span><span><b>À clarifier</b> · l’information serait utile mais manque</span><span><b>À ne pas inventer</b> · l’affirmation est absente ou contredit les sources</span></div>
+      <div className="diagnostic-board">
+        {diagnosticItems.map((item, index) => <button key={item} className={"diagnostic-item " + app.diagnostic[index].replaceAll(" ", "-")} onClick={() => cycle(index)}>
+          <span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p><em>{app.diagnostic[index] || "à classer"}</em>
+        </button>)}
       </div>
-      <div className="method-review"><b>Relecture en binôme :</b> un élément est-il rangé dans la mauvaise colonne ? En particulier, une décision humaine ne doit pas devenir une simple instruction à l’IA.</div>
-      <div className="method-spec">
-        <div className="method-spec-heading"><span className="kicker">MINI-SPÉCIFICATION</span><h3>Formalisez votre méthode de travail.</h3><p>Elle doit permettre à une autre personne de comprendre quoi préparer, quoi contrôler et à quel moment reprendre la main.</p></div>
-        <div className="method-form-grid">
-          <Field label="Nom de la méthode" value={app.methodName} onChange={(value: string) => update("methodName", value)} placeholder="Ex. Préparer une note de synthèse fiable" />
-          <Field label="Quand l’utiliser" value={app.methodWhen} onChange={(value: string) => update("methodWhen", value)} placeholder="À quel moment ou pour quelle tâche récurrente ?" />
-          <MethodArea title="Entrées variables" hint="Les paramètres à fournir à chaque utilisation." value={app.methodInputs} onChange={(value: string) => update("methodInputs", value)} placeholder="Données, public, périmètre, échéance…" />
-          <MethodArea title="Instructions stables" hint="Les règles qui restent identiques." value={app.methodInstructions} onChange={(value: string) => update("methodInstructions", value)} placeholder="Structure, ton, limites, formulation des inconnues…" />
-          <MethodArea title="Sources nécessaires" hint="Les sources autorisées et leur rôle." value={app.methodSources} onChange={(value: string) => update("methodSources", value)} placeholder="Référentiels, notes validées, documents sources…" />
-          <MethodArea title="Étapes à suivre" hint="L’ordre de travail reproductible." value={app.methodSteps} onChange={(value: string) => update("methodSteps", value)} placeholder="Préparer, produire, itérer, contrôler…" />
-          <MethodArea title="Critères de qualité" hint="Ce qui rend le résultat utilisable." value={app.methodQuality} onChange={(value: string) => update("methodQuality", value)} placeholder="Exactitude, format, traçabilité, clarté…" />
-          <MethodArea title="Validation humaine indispensable" hint="Qui décide, sur quel point et avant quelle action." value={app.methodValidation} onChange={(value: string) => update("methodValidation", value)} placeholder="Validation métier, juridique, éditoriale…" />
-        </div>
-      </div>
-      <div className="method-outcome"><button className="soft" onClick={() => update("methodSkillRevealed", !app.methodSkillRevealed)}>{app.methodSkillRevealed ? "Masquer la conclusion" : "Voir ce que cette méthode permet de créer"}</button>{app.methodSkillRevealed && <div className="skill-reveal"><span className="kicker">OUVERTURE</span><h3>Cette méthode est la matière première d’un Skill.</h3><p>Un Skill formalise une méthode réutilisable, ses entrées, ses contrôles et les validations à conserver. Une démonstration très courte d’un Skill existant peut suivre si le temps le permet.</p></div>}</div>
+      <button className="soft" onClick={() => update("diagnosticReviewed", !app.diagnosticReviewed)}>{app.diagnosticReviewed ? "Masquer le débrief" : "Comparer mon diagnostic"}</button>
+      {app.diagnosticReviewed && <div className="debrief-grid">
+        {diagnosticDebrief.map((item, index) => <article key={item.reason}><b>{String(index + 1).padStart(2, "0")} · {item.status}</b><p>{item.reason}</p></article>)}
+      </div>}
     </section>
-    <div className="export-panel"><div><span className="kicker">VOTRE FICHE PARTICIPANT</span><h2>Prompt, contrôle, décision et méthode réutilisable.</h2><p>La synthèse reste sur cet appareil jusqu’à son export ou sa réinitialisation.</p></div><button className="primary" onClick={exportSheet}>Prévisualiser / imprimer ma fiche <span>↗</span></button></div>
+    <section className="oral-question">
+      <div><span className="kicker">LE CHALLENGER QUESTIONNE</span><h2>Quelles sont les trois informations manquantes qui changeraient le plus le livrable ?</h2><p>Discutez-les d’abord. Ne notez ici que ce que vous voulez conserver pour la suite.</p></div>
+      <textarea value={app.diagnosticQuestion} onChange={(event) => update("diagnosticQuestion", event.target.value)} placeholder="Ex. lien d’inscription, date limite, contact…" />
+    </section>
+    <div className="action-row">
+      <span>Le diagnostic s’arrête ici : vous connaissez maintenant les faits, les absences et les limites.</span>
+      <button className="primary" onClick={() => go("production")}>Préparer la production <span>→</span></button>
+    </div>
   </section>;
+}
+
+function Production({ app, update, go }: { app: AppState; update: UpdateApp; go: GoTo }) {
+  const stage = app.productionStage;
+  const setStage = (next: number) => update("productionStage", next);
+  const compose = () => {
+    update("productionPrompt", app.productionPrompt.trim() || buildProductionPrompt(app));
+    setStage(3);
+  };
+  return <section className="page-grid">
+    <PageHeading eyebrow="LAB TEXTE · PRODUCTION" title="Construire une consigne, puis la tester." text="Le canevas est une aide, pas un formulaire à remplir. Ne précisez que ce qui aide l’IA à produire un résultat utilisable." />
+    <section className="guided-card">
+      <div className="scene-marker"><span>CONSTRUIRE LA CONSIGNE</span><small>Étape {Math.min(stage + 1, 4)} sur 4</small></div>
+      {stage === 0 && <div className="scene">
+        <span className="kicker">1 · OBJECTIF</span><h2>Quel résultat voulez-vous obtenir ?</h2>
+        <Area label="Objectif de la production" value={app.productionObjective} onChange={(value) => update("productionObjective", value)} placeholder="Ex. rédiger un email qui présente clairement le pilote Cap Managers aux managers concernés." />
+        <button className="primary" onClick={() => setStage(1)}>Ajouter le contexte et les sources <span>→</span></button>
+      </div>}
+      {stage === 1 && <div className="scene">
+        <span className="kicker">2 · CONTEXTE ET SOURCES</span><h2>Sur quoi l’IA peut-elle s’appuyer ?</h2>
+        <p className="scene-note">La note validée est déjà disponible. Ajoutez seulement un contexte utile ou une source complémentaire autorisée.</p>
+        <Area label="Contexte ou sources autorisées" value={app.productionSources} onChange={(value) => update("productionSources", value)} placeholder={sourceBlock} />
+        <button className="primary" onClick={() => setStage(2)}>Préciser les limites et le format <span>→</span></button>
+      </div>}
+      {stage === 2 && <div className="scene">
+        <span className="kicker">3 · LIMITES ET FORMAT</span><h2>Que doit respecter la réponse ?</h2>
+        <Area label="Contraintes / limites" value={app.productionConstraints} onChange={(value) => update("productionConstraints", value)} placeholder="Ex. ne rien inventer, signaler les informations absentes…" />
+        <Field label="Format attendu" value={app.productionFormat} onChange={(value) => update("productionFormat", value)} placeholder="Ex. email court avec objet et informations à confirmer" />
+        <details className="role-details"><summary>+ Ajouter un rôle (optionnel)</summary><Field label="Rôle utile" value={app.productionRole} onChange={(value) => update("productionRole", value)} placeholder="Ex. responsable de communication interne" /></details>
+        <button className="primary" onClick={compose}>Composer le prompt <span>→</span></button>
+      </div>}
+      {stage >= 3 && <div className="scene">
+        <span className="kicker">4 · PROMPT À TESTER</span><h2>Votre formulation reste libre.</h2>
+        <textarea className="prompt-editor" value={app.productionPrompt} onChange={(event) => update("productionPrompt", event.target.value)} placeholder={buildProductionPrompt(app)} />
+        <details className="inline-help"><summary>Besoin d’un indice ?</summary><ul><li>Votre objectif est-il clair ?</li><li>Les sources autorisées sont-elles identifiées ?</li><li>Avez-vous prévu le traitement des informations absentes ?</li><li>Le format attendu est-il suffisamment explicite ?</li></ul></details>
+        <div className="button-pair"><button className="copy" onClick={() => copyText(app.productionPrompt || buildProductionPrompt(app))}>Copier le prompt</button><button className="soft" onClick={() => setStage(4)}>Passer au test dans l’IA</button></div>
+      </div>}
+      {stage >= 4 && <div className="scene scene-v1">
+        <span className="kicker">RETOUR DE L’IA</span><h2>Collez ici votre V1 obtenue.</h2>
+        <p>Une V1 déjà correcte reste intéressante : vous pourrez ensuite l’améliorer et la contrôler. Si vous n’avez pas de V1 exploitable, l’atelier prévoit un exemple de secours.</p>
+        <textarea value={app.productionV1} onChange={(event) => update("productionV1", event.target.value)} placeholder="Collez ici la réponse obtenue dans l’IA autorisée…" />
+        <button className="primary" onClick={() => go("image")}>Découvrir le Lab image <span>→</span></button>
+      </div>}
+      {stage > 0 && <div className="scene-back"><button className="text-button" onClick={() => setStage(stage - 1)}>← Revoir l’étape précédente</button></div>}
+    </section>
+  </section>;
+}
+
+function ImageLab({ app, update, go }: { app: AppState; update: UpdateApp; go: GoTo }) {
+  const stage = app.imageStage;
+  const setStage = (next: number) => update("imageStage", next);
+  const toggleLever = (id: string) => update("imageLevers", app.imageLevers.includes(id) ? app.imageLevers.filter((value) => value !== id) : [...app.imageLevers, id]);
+  const cycleClass = (index: number) => {
+    const values: ImageClass[] = ["", "utile", "vague", "décorative"];
+    const classifications = [...app.imageClassifications];
+    classifications[index] = values[(values.indexOf(classifications[index]) + 1) % values.length];
+    update("imageClassifications", classifications);
+  };
+  const useImagePrompt = () => {
+    update("imagePrompt", app.imagePrompt.trim() || buildImagePrompt(app));
+    setStage(4);
+  };
+  return <section className="page-grid">
+    <PageHeading eyebrow="LAB IMAGE · INTENTION VISUELLE" title="Quand l’IA choisit l’image à votre place." text="Un prompt image n’a pas le même vocabulaire qu’un prompt texte. L’enjeu est de rendre les choix visuels importants explicites, sans empiler des mots décoratifs." />
+    <section className="image-lab">
+      <div className="scene-marker"><span>LABORATOIRE IMAGE</span><small>Expérience {Math.min(stage + 1, 5)} sur 5</small></div>
+      {stage === 0 && <div className="scene image-scene">
+        <span className="kicker">1 · TESTER UNE V1</span><h2>Commencez volontairement par un prompt pauvre.</h2>
+        <blockquote>{imageStartPrompt}</blockquote>
+        <p>Testez-le dans l’outil image autorisé. Ne cherchez pas encore à produire une belle image : observez les décisions prises par le modèle.</p>
+        <div className="button-pair"><button className="copy" onClick={() => copyText(imageStartPrompt)}>Copier le prompt de départ</button><button className="primary" onClick={() => setStage(1)}>Observer la V1 <span>→</span></button></div>
+        <details className="fallback"><summary>Utiliser le secours si aucun outil image n’est disponible</summary><p>Le formateur peut travailler à partir du prompt de départ et demander : « Quel cadrage, quelle lumière, quel décor, quelle ambiance le modèle risque-t-il de choisir sans nous consulter ? » La comparaison reste ensuite possible à partir de la V2 proposée.</p></details>
+      </div>}
+      {stage === 1 && <div className="scene image-scene">
+        <span className="kicker">2 · OBSERVER</span><h2>Qu’est-ce que le modèle a décidé à notre place ?</h2>
+        <p>Discutez d’abord. Gardez ici une ou deux observations qui serviront à orienter la V2.</p>
+        <Area label="Nos observations" value={app.imageObservation} onChange={(value) => update("imageObservation", value)} placeholder="Ex. le cadrage est très large ; la lumière semble artificielle ; l’ambiance est générique…" />
+        <button className="primary" onClick={() => setStage(2)}>Découvrir les leviers visuels <span>→</span></button>
+      </div>}
+      {stage === 2 && <div className="scene image-scene">
+        <span className="kicker">3 · PRÉCISION UTILE ?</span><h2>Retournez les cartes, puis classez les formulations.</h2>
+        <div className="flash-grid">{imageLevers.map((lever) => <FlashCard key={lever.id} title={lever.group} text={lever.label} />)}</div>
+        <div className="statement-grid">{imageStatements.map((item, index) => <button key={item.text} className={"statement " + app.imageClassifications[index].replaceAll("é", "e")} onClick={() => cycleClass(index)}><span>{item.text}</span><em>{app.imageClassifications[index] || "cliquer pour classer"}</em></button>)}</div>
+        <details className="inline-help"><summary>Voir le débrief</summary><p>Les formulations utiles donnent une information exploitable au modèle. Une formule vague exprime une intention sans choix concret. Une formule décorative allonge souvent le prompt sans orienter clairement le résultat.</p></details>
+        <button className="primary" onClick={() => setStage(3)}>Choisir les précisions utiles <span>→</span></button>
+      </div>}
+      {stage === 3 && <div className="scene image-scene">
+        <span className="kicker">4 · COMPOSER UNE V2</span><h2>Choisissez les leviers qui servent votre intention.</h2>
+        <p>Ne les cochez pas tous : chaque choix doit répondre à une décision visuelle que vous assumez.</p>
+        <div className="lever-grid">{imageLevers.map((lever) => <button key={lever.id} className={app.imageLevers.includes(lever.id) ? "chosen" : ""} onClick={() => toggleLever(lever.id)}><small>{lever.group}</small>{lever.label}</button>)}</div>
+        <textarea className="prompt-editor" value={app.imagePrompt} onChange={(event) => update("imagePrompt", event.target.value)} placeholder={buildImagePrompt(app)} />
+        <details className="inline-help"><summary>Et la langue du prompt ?</summary><p>Selon l’outil, testez une version française puis une version anglaise. L’anglais est une hypothèse à vérifier, pas une règle universelle.</p></details>
+        <button className="primary" onClick={useImagePrompt}>Tester la V2 <span>→</span></button>
+      </div>}
+      {stage >= 4 && <div className="scene image-scene">
+        <span className="kicker">5 · COMPARER ET ITÉRER</span><h2>Qu’est-ce qui est maintenant choisi volontairement ?</h2>
+        <Area label="V1 / V2 : ce que nous observons" value={app.imageCompare} onChange={(value) => update("imageCompare", value)} placeholder="Ex. le plan est plus cohérent, la lumière sert mieux le portrait, l’ambiance est moins générique…" />
+        <div className="parameter-choice"><span>Ne modifiez ensuite qu’un paramètre.</span>{["Lumière", "Cadrage", "Réalisme", "Ambiance"].map((item) => <button key={item} className={app.imageParameter === item ? "chosen" : ""} onClick={() => update("imageParameter", item)}>{item}</button>)}</div>
+        <Field label="Effet attendu avant génération" value={app.imagePrediction} onChange={(value) => update("imagePrediction", value)} placeholder="Ex. une lumière latérale rendra le portrait moins plat." />
+        <p className="image-note">Ce laboratoire se termine dans l’outil image : générez, comparez, puis revenez ici seulement pour formaliser l’apprentissage.</p>
+        <button className="primary" onClick={() => go("iteration")}>Revenir au texte : itérer <span>→</span></button>
+      </div>}
+      {stage > 0 && <div className="scene-back"><button className="text-button" onClick={() => setStage(stage - 1)}>← Revoir l’expérience précédente</button></div>}
+    </section>
+  </section>;
+}
+
+function Iteration({ app, update, go }: { app: AppState; update: UpdateApp; go: GoTo }) {
+  const v1 = app.productionV1.trim() || sampleV1;
+  const makeIterationPrompt = () => {
+    update("iterationPrompt", app.iterationPrompt.trim() || iterationPromptTemplate.replace("[coller ici la V1]", v1));
+    update("iterationRevealed", true);
+  };
+  return <section className="page-grid">
+    <PageHeading eyebrow="LAB TEXTE · ITÉRATION" title="Améliorer sans repartir de zéro." text="Une bonne itération conserve ce qui fonctionne, précise ce qui doit évoluer et rappelle les limites qui ne doivent pas bouger." />
+    <section className="iteration-layout">
+      <article className="v1-card">
+        <span className="kicker">V1 À OBSERVER</span><h2>Le premier résultat</h2>
+        <textarea value={v1} onChange={(event) => update("productionV1", event.target.value)} aria-label="V1 à observer" />
+        {!app.productionV1.trim() && <small>Exemple de secours affiché : utilisez-le si votre test réel ne fournit pas de matière suffisante.</small>}
+      </article>
+      <article className="guided-card compact-card">
+        <span className="kicker">VOTRE RETOUR</span><h2>Qu’est-ce qui vous gêne ?</h2>
+        <p>Relevez ensemble trois éléments : à conserver, à modifier ou à vérifier.</p>
+        <Field label="À conserver" value={app.iterationKeep} onChange={(value) => update("iterationKeep", value)} placeholder="Ex. ton clair, structure courte…" />
+        <Field label="À modifier" value={app.iterationModify} onChange={(value) => update("iterationModify", value)} placeholder="Ex. rendre l’objectif et le volontariat plus visibles…" />
+        <Field label="À vérifier" value={app.iterationVerify} onChange={(value) => update("iterationVerify", value)} placeholder="Ex. aucun délai, lien ou horaire inventé…" />
+        <details className="inline-help"><summary>Besoin d’un indice ?</summary><p>L’intention est-elle claire ? Ce qui est attendu est-il explicite ? Une information sans source a-t-elle été ajoutée ?</p></details>
+        <button className="primary" onClick={makeIterationPrompt}>Préparer l’instruction <span>→</span></button>
+      </article>
+      {app.iterationRevealed && <article className="v2-card">
+        <span className="kicker">TESTER UNE V2</span><h2>Une instruction précise, puis un nouveau test.</h2>
+        <textarea value={app.iterationPrompt} onChange={(event) => update("iterationPrompt", event.target.value)} />
+        <button className="copy" onClick={() => copyText(app.iterationPrompt)}>Copier l’instruction</button>
+        <Area label="Collez ici votre V2" value={app.iteratedOutput} onChange={(value) => update("iteratedOutput", value)} placeholder="Collez la V2 obtenue dans l’IA autorisée…" />
+        {app.iteratedOutput.trim() && <details className="reference"><summary>Comparer à une proposition de référence</summary><pre>{v2Example}</pre></details>}
+      </article>}
+    </section>
+    <div className="action-row">
+      <span>La référence n’apparaît qu’après votre propre essai.</span>
+      <button className="primary" onClick={() => go("control")}>Contrôler la V2 <span>→</span></button>
+    </div>
+  </section>;
+}
+
+function Control({ app, update, go, openQuiz }: { app: AppState; update: UpdateApp; go: GoTo; openQuiz: () => void }) {
+  const prompt = app.controlPrompt || buildControlPrompt(app);
+  return <section className="page-grid">
+    <PageHeading eyebrow="LAB TEXTE · CONTRÔLE" title="Une réponse fluide n’est pas forcément exploitable." text="Le prompt de contrôle aide à repérer les affirmations non justifiées. Il ne décide jamais à la place d’une personne." />
+    <section className="control-layout">
+      <article className="notion-card">
+        <span className="kicker">À QUOI SERT LE CONTRÔLE ?</span>
+        <h2>Relire avec un cadre.</h2>
+        <ul><li>Vérifier le respect de la consigne.</li><li>Repérer les affirmations non justifiées.</li><li>Identifier ce qui reste à confirmer.</li></ul>
+        <p><b>Rappel :</b> l’IA peut aider à relire sa réponse ; la décision finale reste humaine.</p>
+        <button className="text-button" onClick={openQuiz}>Mini-défi : décision humaine</button>
+      </article>
+      <article className="control-card">
+        <span className="kicker">PROMPT DE CONTRÔLE</span><h2>Un seul prompt, à adapter si nécessaire.</h2>
+        <textarea value={prompt} onChange={(event) => update("controlPrompt", event.target.value)} />
+        <button className="copy" onClick={() => copyText(prompt)}>Copier le prompt de contrôle</button>
+      </article>
+      <article className="example-card">
+        <span className="kicker">UN EXEMPLE</span><h2>Affirmation → constat → correction</h2>
+        <dl><dt>« Inscription avant le 25 septembre »</dt><dd>La date n’apparaît dans aucune source.</dd><dd>La retirer ou demander confirmation avant diffusion.</dd></dl>
+        <div className="decision-area"><span>Décision humaine sur la V2</span>{(["Exploitable", "À corriger ou vérifier", "À ne pas diffuser"] as Decision[]).map((item) => <button key={item} className={app.qualityDecision === item ? "chosen" : ""} onClick={() => update("qualityDecision", item)}>{item}</button>)}</div>
+      </article>
+    </section>
+    <div className="action-row">
+      <span>Un contrôle utile rend visibles les écarts ; il ne les efface pas.</span>
+      <button className="primary" onClick={() => go("challenge")}>Appliquer la méthode à mon métier <span>→</span></button>
+    </div>
+  </section>;
+}
+
+function Challenge({ app, update, go }: { app: AppState; update: UpdateApp; go: GoTo }) {
+  const stage = app.challengeStage;
+  const setStage = (next: number) => update("challengeStage", next);
+  return <section className="page-grid challenge-page">
+    <PageHeading eyebrow="CHALLENGE MÉTIER" title="Transférer la méthode à une vraie tâche." text="Partez d’abord d’une situation professionnelle réelle. Le cas fictif n’est là que si vous ne pouvez pas utiliser un cas anonymisé aujourd’hui." />
+    <section className="challenge-card">
+      <div className="scene-marker"><span>MON CAS PROFESSIONNEL</span><small>Étape {Math.min(stage + 1, 4)} sur 4</small></div>
+      {stage === 0 && <div className="scene">
+        <span className="kicker">1 · MON BESOIN PROFESSIONNEL</span><h2>Quelle tâche pourriez-vous mieux encadrer avec l’IA ?</h2>
+        <p>Exemples : email, synthèse, préparation pédagogique, compte rendu, procédure, communication, tableau, FAQ, analyse de document.</p>
+        <label className="privacy-check"><input type="checkbox" checked={app.challengeAnonymized} onChange={(event) => update("challengeAnonymized", event.target.checked)} /><span>Mon cas est anonymisé et l’outil choisi est autorisé.</span></label>
+        <Area label="Mon besoin / livrable" value={app.finalNeed} onChange={(value) => update("finalNeed", value)} placeholder="Décrivez une tâche réelle que vous réalisez ou allez réaliser." />
+        <details className="fallback"><summary>Je préfère utiliser le cas fictif de secours</summary><p>Préparer une synthèse claire à partir de notes de réunion incomplètes, sans attribuer de décisions ou d’actions qui ne figurent pas dans les notes.</p></details>
+        <button className="primary" onClick={() => setStage(1)}>Identifier mes sources et limites <span>→</span></button>
+      </div>}
+      {stage === 1 && <div className="scene">
+        <span className="kicker">2 · MES SOURCES ET LIMITES</span><h2>De quoi l’IA dispose-t-elle vraiment ?</h2>
+        <Area label="Sources autorisées" value={app.finalSources} onChange={(value) => update("finalSources", value)} placeholder="Documents validés, notes anonymisées, référentiels, données publiques…" />
+        <Area label="Ce qu’il ne faut pas inventer" value={app.finalUnknowns} onChange={(value) => update("finalUnknowns", value)} placeholder="Faits, dates, décisions, données personnelles ou interprétations à confirmer…" />
+        <button className="primary" onClick={() => setStage(2)}>Préparer mon prompt et mon test <span>→</span></button>
+      </div>}
+      {stage === 2 && <div className="scene">
+        <span className="kicker">3 · MON PROMPT / MON TEST</span><h2>Écrivez seulement ce dont vous avez besoin pour essayer.</h2>
+        <textarea className="prompt-editor" value={app.finalPrompt} onChange={(event) => update("finalPrompt", event.target.value)} placeholder="Votre prompt de production, librement formulé…" />
+        <Area label="Résultat obtenu ou protocole de test" value={app.finalOutput} onChange={(value) => update("finalOutput", value)} placeholder="Ce que vous allez observer ou la V1 déjà obtenue…" />
+        <button className="primary" onClick={() => setStage(3)}>Prévoir mon contrôle <span>→</span></button>
+      </div>}
+      {stage >= 3 && <div className="scene">
+        <span className="kicker">4 · MON CONTRÔLE</span><h2>Comment saurez-vous que le résultat est utilisable ?</h2>
+        <Area label="Contrôle prévu" value={app.finalControl} onChange={(value) => update("finalControl", value)} placeholder="Ex. comparer aux sources, faire relire, vérifier les chiffres, valider le ton…" />
+        <div className="decision-area"><span>Décision humaine attendue</span>{(["Exploitable", "À corriger ou vérifier", "À ne pas diffuser"] as Decision[]).map((item) => <button key={item} className={app.finalDecision === item ? "chosen" : ""} onClick={() => update("finalDecision", item)}>{item}</button>)}</div>
+        <Field label="Prochaine action concrète" value={app.nextAction} onChange={(value) => update("nextAction", value)} placeholder="Ex. tester le prompt sur un dossier validé, puis le faire relire par…" />
+        <button className="primary" onClick={() => go("capitalisation")}>Et si je devais refaire cette tâche ? <span>→</span></button>
+      </div>}
+      {stage > 0 && <div className="scene-back"><button className="text-button" onClick={() => setStage(stage - 1)}>← Revoir l’étape précédente</button></div>}
+    </section>
+  </section>;
+}
+
+function Capitalisation({ app, update, exportSheet }: { app: AppState; update: UpdateApp; exportSheet: () => void }) {
+  return <section className="page-grid capitalisation-page">
+    <PageHeading eyebrow="CAPITALISER" title="Du prompt à la méthode réutilisable." text="Une tâche récurrente devient plus simple quand on sépare ce qui reste stable de ce qui varie, de ce qui doit être contrôlé et de ce qui reste humain." />
+    <section className="method-section">
+      <div className="method-question">« Si vous deviez refaire cette tâche chaque semaine, qu’auriez-vous intérêt à ne plus réexpliquer à l’IA ? »</div>
+      <div className="method-grid">
+        <Area label="Stable" value={app.methodStable} onChange={(value) => update("methodStable", value)} placeholder="Structure, ton, règles, étapes…" />
+        <Area label="Variable" value={app.methodVariable} onChange={(value) => update("methodVariable", value)} placeholder="Données, public, période, objectif…" />
+        <Area label="Contrôle" value={app.methodControl} onChange={(value) => update("methodControl", value)} placeholder="Sources à comparer, critères, alertes…" />
+        <Area label="Humain" value={app.methodHuman} onChange={(value) => update("methodHuman", value)} placeholder="Arbitrage, validation, diffusion…" />
+      </div>
+      <div className="method-summary">
+        <Field label="Nom simple de ma méthode" value={app.methodName} onChange={(value) => update("methodName", value)} placeholder="Ex. Préparer une synthèse fiable" />
+        <p>Relisez en binôme : une décision humaine n’est pas une instruction qu’il suffirait de déléguer à l’IA.</p>
+        <button className="soft" onClick={() => update("methodSkillRevealed", !app.methodSkillRevealed)}>{app.methodSkillRevealed ? "Masquer l’ouverture" : "Voir ce que cette méthode peut devenir"}</button>
+      </div>
+      {app.methodSkillRevealed && <div className="skill-reveal"><span className="kicker">OUVERTURE</span><h2>Cette méthode est la matière première d’un Skill.</h2><p>Un Skill structure une méthode réutilisable : ses instructions stables, ses variables, ses ressources, ses contrôles et les validations humaines à conserver. Une démonstration peut suivre, sans dépendre d’une plateforme particulière.</p></div>}
+    </section>
+    <section className="export-panel">
+      <div><span className="kicker">VOTRE FICHE PARTICIPANT</span><h2>Une prochaine action, un prompt, un contrôle et une méthode.</h2><p>Les données restent sur cet appareil jusqu’à leur export ou leur effacement local.</p></div>
+      <button className="primary" onClick={exportSheet}>Exporter / imprimer <span>↗</span></button>
+    </section>
+  </section>;
+}
+
+function PageHeading({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
+  return <div className="page-heading"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{text}</p></div>;
 }
 
 function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
-  return <label className="field"><span>{label}</span><input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} /></label>;
+  return <label className="field"><span>{label}</span><input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /></label>;
 }
 
-function MethodArea({ title, hint, value, onChange, placeholder }: { title: string; hint: string; value: string; onChange: (value: string) => void; placeholder: string }) {
-  return <label className="method-area"><span>{title}</span><small>{hint}</small><textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} /></label>;
+function Area({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
+  return <label className="area"><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /></label>;
 }
 
-function PromptLibrary({ app, update }: any) {
-  const [selectedId, setSelectedId] = useState("");
-  const [variables, setVariables] = useState<Record<string, string>>({});
-  const selected = [...promptExamples, ...app.promptLibrary].find((template) => template.id === selectedId);
-  const variableNames = selected ? Array.from(new Set([...selected.text.matchAll(/{{\s*([^}]+)\s*}}/g)].map((match) => match[1].trim()))) : [];
-  const adaptedPrompt = selected ? variableNames.reduce((text, name) => text.replaceAll("{{" + name + "}}", variables[name]?.trim() || "{{" + name + "}}"), selected.text) : "";
-  const selectTemplate = (template: PromptTemplate) => { setSelectedId(template.id); setVariables({}); };
-  const saveCurrentPrompt = () => {
-    if (!app.prompt.trim()) return;
-    const template = { id: "prompt-" + Date.now(), name: app.libraryName.trim() || "Prompt sans titre", text: app.prompt.trim() };
-    update("promptLibrary", [...app.promptLibrary, template]); update("libraryName", ""); selectTemplate(template);
-  };
-  const duplicateExample = (example: PromptTemplate) => {
-    const template = { ...example, id: "prompt-" + Date.now() };
-    update("promptLibrary", [...app.promptLibrary, template]); update("libraryName", template.name); update("prompt", template.text); selectTemplate(template);
-  };
-  const removeTemplate = (id: string) => { update("promptLibrary", app.promptLibrary.filter((template: PromptTemplate) => template.id !== id)); if (selectedId === id) setSelectedId(""); };
+function FlashCard({ title, text }: { title: string; text: string }) {
+  const [open, setOpen] = useState(false);
+  return <button className={"flash-card " + (open ? "open" : "")} onClick={() => setOpen(!open)}><small>{title}</small><b>{open ? text : "Retourner la carte"}</b><span>{open ? "Masquer" : "Découvrir"}</span></button>;
+}
 
-  return <section className="library-section" aria-label="Bibliothèque de prompts">
-    <div className="library-heading"><div><span className="kicker">BIBLIOTHÈQUE PERSONNELLE</span><h2>Vos prompts réutilisables, sur cet appareil.</h2><p>Enregistrez un prompt vierge ou testé, puis remplacez simplement les variables entre doubles accolades.</p></div><div className="save-prompt"><input value={app.libraryName} onChange={(e) => update("libraryName", e.target.value)} placeholder="Nom du prompt (facultatif)" /><button className="soft" onClick={saveCurrentPrompt} disabled={!app.prompt.trim()}>Ajouter le prompt ouvert</button></div></div>
-    <div className="library-grid">
-      <article className="library-card"><span className="kicker">EXEMPLES À DUPLIQUER</span><p>Ils ne sont pas ajoutés à votre bibliothèque tant que vous ne les dupliquez pas.</p>{promptExamples.map((example) => <div className="template-row" key={example.id}><div><b>{example.name}</b><small>{example.text.match(/{{[^}]+}}/g)?.join(" · ")}</small></div><button className="soft" onClick={() => duplicateExample(example)}>Dupliquer</button></div>)}</article>
-      <article className="library-card"><span className="kicker">MA BIBLIOTHÈQUE</span>{app.promptLibrary.length === 0 ? <p className="empty-library">Elle est vierge pour l’instant. Créez votre premier prompt ou dupliquez un exemple.</p> : app.promptLibrary.map((template: PromptTemplate) => <div className="template-row" key={template.id}><button className="template-open" onClick={() => selectTemplate(template)}><b>{template.name}</b><small>{template.text.match(/{{[^}]+}}/g)?.join(" · ") || "sans variable"}</small></button><button className="remove-template" onClick={() => removeTemplate(template.id)} aria-label={"Supprimer " + template.name}>×</button></div>)}</article>
-      <article className="library-card variable-card"><span className="kicker">VARIABLES RAPIDES</span>{selected ? <><h3>{selected.name}</h3>{variableNames.length > 0 ? <div className="variable-grid">{variableNames.map((name) => <label key={name}><span>{name}</span><input value={variables[name] || ""} onChange={(e) => setVariables((current) => ({ ...current, [name]: e.target.value }))} placeholder={"Valeur de « " + name + " »"} /></label>)}</div> : <p>Ce prompt ne contient pas de variable : vous pouvez l’utiliser tel quel ou le modifier dans le Lab.</p>}<textarea readOnly value={adaptedPrompt} aria-label="Version adaptée du prompt" /><div className="library-actions"><button className="soft" onClick={() => update("prompt", adaptedPrompt)}>Utiliser dans le Lab</button><button className="copy" onClick={() => navigator.clipboard?.writeText(adaptedPrompt)}>Copier la version adaptée</button></div></> : <p className="empty-library">Sélectionnez un exemple ou un prompt enregistré pour renseigner ses variables.</p>}</article>
+function Resources({ step, onClose }: { step: Step; onClose: () => void }) {
+  const contextual: Record<Step, { title: string; text: string }> = {
+    mission: { title: "Le parcours", text: "Le studio fait alterner diagnostic, test réel, itération, contrôle et transfert." },
+    sources: { title: "Demande ou source ?", text: "Une demande aide à comprendre l’intention ; une source validée établit les faits utilisables." },
+    production: { title: "Les quatre repères", text: "Objectif, sources, limites et format : quatre points suffisent souvent à orienter une production." },
+    image: { title: "Prompt image", text: "Une précision est utile lorsqu’elle traduit une décision visuelle exploitable par le modèle." },
+    iteration: { title: "Itérer", text: "Un bon retour précise ce qui est à conserver, modifier ou vérifier." },
+    control: { title: "Contrôler", text: "L’IA peut mettre en évidence un écart ; la décision de diffusion reste humaine." },
+    challenge: { title: "Transférer", text: "Utilisez un cas réel anonymisé en priorité. Le cas fictif reste une solution de secours." },
+    capitalisation: { title: "Réutiliser", text: "Séparer stable, variable, contrôle et humain prépare une méthode réutilisable." },
+  };
+  return <Drawer title="Pour aller plus loin" onClose={onClose}>
+    <article className="context-resource"><span className="kicker">REPÈRE CONTEXTUEL</span><h3>{contextual[step].title}</h3><p>{contextual[step].text}</p></article>
+    <p className="drawer-intro">Les fiches complètent l’atelier. Elles ne remplacent pas les expériences en cours.</p>
+    <div className="resource-list">
+      <a href="/resources/pack-fiches-prompt-engineering.pdf" target="_blank" rel="noopener noreferrer">Pack de 4 fiches : ROCOF, itération, contrôle, boîte à outils <small>PDF</small></a>
+      <a href="/resources/prompt-engineering-2026.pdf" target="_blank" rel="noopener noreferrer">Le prompt engineering est-il encore nécessaire en 2026 ? <small>PDF</small></a>
     </div>
-  </section>;
+  </Drawer>;
 }
 
-function Resources({ onClose }: { onClose: () => void }) {
-  return <aside className="resource-drawer" role="dialog" aria-label="Ressources de l’atelier"><div className="drawer-top"><div><span className="eyebrow">RESSOURCES</span><h2>À garder sous la main</h2></div><button onClick={onClose} aria-label="Fermer les ressources">×</button></div><p>Les ressources complètent les manipulations ; elles ne constituent pas une étape du parcours.</p><div className="resource-list"><a href="/resources/pack-fiches-prompt-engineering.pdf" target="_blank" rel="noopener noreferrer">Pack de 4 fiches : ROCOF, itération, contrôle, boîte à outils <small>PDF existant</small></a><a href="/resources/prompt-engineering-2026.pdf" target="_blank" rel="noopener noreferrer">Le prompt engineering est-il encore nécessaire en 2026 ? <small>PDF existant</small></a><a href="#documents">Documents HelioTech <small>Cas de manipulation intégré</small></a><a href="#outputs">Outputs imparfaits <small>Cas de manipulation intégré</small></a></div><div className="drawer-note">La capsule vidéo de lancement aura sa place sur la Mission, juste avant l’ouverture des documents A et B.</div></aside>;
+function Playground({ onClose }: { onClose: () => void }) {
+  const [activity, setActivity] = useState("battle");
+  const [battle, setBattle] = useState("");
+  const [repair, setRepair] = useState<string[]>([]);
+  const [useless, setUseless] = useState("");
+  const [imageChange, setImageChange] = useState("");
+  const repairOptions = ["Nommer le livrable attendu", "Indiquer les sources autorisées", "Ajouter une limite d’invention", "Ajouter dix adjectifs valorisants", "Demander un rôle sans utilité"];
+  const toggleRepair = (item: string) => setRepair((current) => current.includes(item) ? current.filter((value) => value !== item) : current.length < 3 ? [...current, item] : current);
+  return <Drawer title="Expériences facultatives" onClose={onClose} wide>
+    <p className="drawer-intro">Réserve activable par le formateur : ouvrez une expérience, animez-la, puis refermez-la. Le parcours principal et ses données ne changent pas.</p>
+    <div className="playground-tabs">
+      <button className={activity === "battle" ? "active" : ""} onClick={() => setActivity("battle")}>Prompt Battle</button>
+      <button className={activity === "repair" ? "active" : ""} onClick={() => setActivity("repair")}>Prompt Repair</button>
+      <button className={activity === "useless" ? "active" : ""} onClick={() => setActivity("useless")}>La consigne inutile</button>
+      <button className={activity === "image" ? "active" : ""} onClick={() => setActivity("image")}>Image Challenge</button>
+    </div>
+    {activity === "battle" && <section className="play-activity"><span className="kicker">PROMPT BATTLE</span><h3>Lequel donne les instructions les plus utiles ?</h3><div className="battle-grid"><button className={battle === "a" ? "chosen" : ""} onClick={() => setBattle("a")}><b>A</b> « Rédige un email professionnel et impactant sur Cap Managers. »</button><button className={battle === "b" ? "chosen" : ""} onClick={() => setBattle("b")}><b>B</b> « À partir de la note validée, rédige un email court. N’invente aucun lien, délai ou horaire absent des sources et signale les éléments à confirmer. »</button></div>{battle && <p className="play-debrief"><b>Débrief :</b> B apporte une source, une limite et un comportement attendu face aux informations absentes. Le ton n’est utile que s’il sert un usage clair.</p>}</section>}
+    {activity === "repair" && <section className="play-activity"><span className="kicker">PROMPT REPAIR</span><h3>Vous avez droit à trois modifications.</h3><p>« Fais-moi une bonne synthèse de ce document, très professionnelle, complète et parfaite. »</p><div className="choice-list">{repairOptions.map((item) => <button key={item} className={repair.includes(item) ? "chosen" : ""} onClick={() => toggleRepair(item)}>{repair.includes(item) ? "✓" : "○"} {item}</button>)}</div>{repair.length === 3 && <p className="play-debrief"><b>Débrief :</b> priorisez le livrable, les sources et les limites. Les adjectifs ne réparent pas un manque de contexte.</p>}</section>}
+    {activity === "useless" && <section className="play-activity"><span className="kicker">LA CONSIGNE INUTILE</span><h3>Quelle instruction allonge le prompt sans guider réellement le modèle ?</h3><div className="choice-list">{["« Utilise uniquement les notes jointes. »", "« Produis une synthèse en trois parties. »", "« Fais quelque chose d’incroyable, parfait et exceptionnel. »", "« Signale les décisions qui ne sont pas explicitement documentées. »"].map((item, index) => <button key={item} className={useless === String(index) ? "chosen" : ""} onClick={() => setUseless(String(index))}>{item}</button>)}</div>{useless && <p className="play-debrief"><b>Débrief :</b> la troisième formule est décorative : elle exprime un désir, mais ne donne pas de critère opérationnel.</p>}</section>}
+    {activity === "image" && <section className="play-activity"><span className="kicker">IMAGE CHALLENGE</span><h3>Modifiez un seul paramètre et anticipez l’effet.</h3><div className="choice-list">{["Lumière latérale douce", "Plan plus serré", "Texture de peau naturelle", "Ambiance plus institutionnelle"].map((item) => <button key={item} className={imageChange === item ? "chosen" : ""} onClick={() => setImageChange(item)}>{item}</button>)}</div>{imageChange && <p className="play-debrief"><b>Question avant génération :</b> que devrait changer « {imageChange} » dans le résultat ? Testez ensuite cette seule variable dans l’outil image.</p>}</section>}
+  </Drawer>;
+}
+
+function Drawer({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+  return <div className="modal-backdrop" role="presentation"><aside className={"drawer " + (wide ? "drawer-wide" : "")} role="dialog" aria-modal="true" aria-label={title}><div className="drawer-top"><div><span className="eyebrow">ATELIER</span><h2>{title}</h2></div><button className="modal-close" onClick={onClose} aria-label="Fermer">×</button></div>{children}</aside></div>;
 }
 
 const quizData = {
-  0: { title: "Demande ou source ?", question: "Avant de demander un contenu à une IA, quel document permet de décider ce qui peut être affirmé ?", options: ["La demande reçue : elle donne le ton attendu.", "Le document qui contient le plus d’informations.", "La note validée : elle établit les faits utilisables.", "L’output le plus convaincant produit par l’IA."], answer: 2, debrief: "La demande A aide à comprendre l’intention et le livrable. La note B est la base factuelle : ce qui n’y figure pas doit rester à confirmer, pas être inventé." },
-  1: { title: "Une information absente", question: "La source ne précise pas la modalité d’inscription. Quelle action est la plus rigoureuse ?", options: ["Ajouter un lien vers le portail RH.", "Indiquer une date limite raisonnable.", "Signaler l’information manquante et prévoir une formulation provisoire.", "Ne rien mentionner dans l’email."], answer: 2, debrief: "Une modalité peut être indispensable au livrable sans pour autant être inventée. Rendez son absence visible ou demandez-la." },
-  2: { title: "Itérer utilement", question: "Après une V1 correcte mais incomplète, quelle demande d’itération est la plus efficace ?", options: ["Améliore ce mail et rends-le plus professionnel.", "Réécris tout avec un style plus impactant.", "Conserve les faits confirmés, raccourcis l’introduction et ajoute une check-list de trois points sans inventer d’information.", "Ajoute toutes les informations pratiques attendues par les managers."], answer: 2, debrief: "Une bonne itération cible le changement attendu et rappelle les limites. Ici, la checklist aide l’action, mais elle ne doit pas créer de lien, horaire ou date limite absents des sources." },
-  3: { title: "Décision humaine", question: "Un output contient une date non présente dans la source. Quelle décision est la plus appropriée ?", options: ["Le diffuser : la date paraît plausible.", "La conserver mais demander à l’IA de la justifier.", "La marquer comme non justifiée, demander confirmation et corriger l’output.", "Réécrire l’ensemble du prompt."], answer: 2, debrief: "L’IA peut aider à détecter un écart ; elle ne transforme pas une information absente en fait confirmé. La validation reste humaine." },
+  0: { title: "Demande ou source ?", question: "Avant de demander un contenu à une IA, quel document permet de décider ce qui peut être affirmé ?", options: ["La demande reçue, car elle donne le ton.", "Le document le plus long.", "La note validée, car elle établit les faits utilisables.", "L’output le plus convaincant."], answer: 2, debrief: "La demande aide à comprendre l’intention. La note validée établit les faits utilisables : ce qui n’y figure pas doit rester à confirmer." },
+  1: { title: "Précision image", question: "Quelle formulation apporte le plus d’information directement exploitable à un générateur d’image ?", options: ["Make it amazing.", "Make it professional.", "Soft natural window light from camera left.", "Masterpiece, best quality."], answer: 2, debrief: "Une précision utile décrit un choix concret. Elle ne garantit pas un résultat parfait, mais elle réduit la part laissée au modèle." },
+  2: { title: "Décision humaine", question: "Un output contient une date absente de la source. Quelle action est la plus rigoureuse ?", options: ["La diffuser : elle paraît plausible.", "Demander à l’IA de la justifier.", "La marquer à vérifier, demander confirmation et corriger l’output.", "Réécrire tout le prompt."], answer: 2, debrief: "L’IA peut signaler un écart ; elle ne transforme pas une information absente en fait confirmé. La décision de diffusion reste humaine." },
 };
 
-function Quiz({ id, answer, setAnswer, onClose }: { id: number; answer: string; setAnswer: (value: string) => void; onClose: () => void }) {
+function Quiz({ id, onClose }: { id: number; onClose: () => void }) {
+  const [answer, setAnswer] = useState<number | null>(null);
   const data = quizData[id as keyof typeof quizData];
-  return <div className="modal-backdrop"><section className="quiz-modal" role="dialog" aria-modal="true"><button className="modal-close" onClick={onClose}>×</button><span className="eyebrow">MICRO-QUIZ · {data.title}</span><h2>{data.question}</h2><div className="quiz-options">{data.options.map((option, index) => <button key={option} className={answer ? (index === data.answer ? "correct" : index === Number(answer) ? "incorrect" : "") : ""} onClick={() => setAnswer(String(index))}><b>{String.fromCharCode(65 + index)}</b>{option}</button>)}</div>{answer && <div className="quiz-debrief"><strong>{Number(answer) === data.answer ? "Bonne décision." : "Regardons le critère décisif."}</strong><p>{data.debrief}</p></div>}</section></div>;
+  return <div className="modal-backdrop" role="presentation"><section className="quiz-modal" role="dialog" aria-modal="true"><button className="modal-close" onClick={onClose}>×</button><span className="eyebrow">MINI-DÉFI · {data.title}</span><h2>{data.question}</h2><div className="quiz-options">{data.options.map((option, index) => <button key={option} className={answer === null ? "" : index === data.answer ? "correct" : answer === index ? "incorrect" : ""} onClick={() => setAnswer(index)}><b>{String.fromCharCode(65 + index)}</b>{option}</button>)}</div>{answer !== null && <div className="quiz-debrief"><strong>{answer === data.answer ? "Le raisonnement est juste." : "Regardons le critère décisif."}</strong><p>{data.debrief}</p></div>}</section></div>;
 }
