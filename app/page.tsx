@@ -7,8 +7,7 @@ type Decision = "Exploitable" | "À corriger ou vérifier" | "À ne pas diffuser
 type DiagnosticChoice = "confirmé" | "à clarifier" | "ne pas inventer" | "";
 type PromptTemplate = { id: string; name: string; text: string };
 
-// Remplacer cette valeur par l’URL YouTube de la capsule de lancement lorsqu’elle sera publiée.
-const workshopIntroVideoUrl = "";
+const workshopIntroVideoUrl = "https://www.youtube.com/embed/Z-heGBuUrh0";
 
 const promptExamples: PromptTemplate[] = [
   {
