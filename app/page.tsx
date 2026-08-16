@@ -13,9 +13,9 @@ const steps: { id: Step; label: string; number: string }[] = [
   { id: "mission", label: "Mission", number: "01" },
   { id: "sources", label: "Texte & sources", number: "02" },
   { id: "production", label: "Production", number: "03" },
-  { id: "image", label: "Image", number: "04" },
-  { id: "iteration", label: "Itération", number: "05" },
-  { id: "control", label: "Contrôle", number: "06" },
+  { id: "iteration", label: "Itération", number: "04" },
+  { id: "control", label: "Contrôle", number: "05" },
+  { id: "image", label: "Image", number: "06" },
   { id: "challenge", label: "Challenge métier", number: "07" },
   { id: "capitalisation", label: "Capitaliser", number: "08" },
 ];
@@ -505,7 +505,7 @@ function Production({ app, update, go }: { app: AppState; update: UpdateApp; go:
         <span className="kicker">RETOUR DE L’IA</span><h2>Collez ici votre V1 obtenue.</h2>
         <p>Une V1 déjà correcte reste intéressante : vous pourrez ensuite l’améliorer et la contrôler. Si vous n’avez pas de V1 exploitable, l’atelier prévoit un exemple de secours.</p>
         <textarea value={app.productionV1} onChange={(event) => update("productionV1", event.target.value)} placeholder="Collez ici la réponse obtenue dans l’IA autorisée…" />
-        <button className="primary" onClick={() => go("image")}>Découvrir le Lab image <span>→</span></button>
+        <button className="primary" onClick={() => go("iteration")}>Passer au Studio d’itération <span>→</span></button>
       </div>}
       {stage > 0 && <div className="scene-back"><button className="text-button" onClick={() => setStage(stage - 1)}>← Revoir l’étape précédente</button></div>}
     </section>
@@ -564,7 +564,7 @@ function ImageLab({ app, update, go }: { app: AppState; update: UpdateApp; go: G
         <div className="parameter-choice"><span>Ne modifiez ensuite qu’un paramètre.</span>{["Lumière", "Cadrage", "Réalisme", "Ambiance"].map((item) => <button key={item} className={app.imageParameter === item ? "chosen" : ""} onClick={() => update("imageParameter", item)}>{item}</button>)}</div>
         <Field label="Effet attendu avant génération" value={app.imagePrediction} onChange={(value) => update("imagePrediction", value)} placeholder="Ex. une lumière latérale rendra le portrait moins plat." />
         <p className="image-note">Ce laboratoire se termine dans l’outil image : générez, comparez, puis revenez ici seulement pour formaliser l’apprentissage.</p>
-        <button className="primary" onClick={() => go("iteration")}>Revenir au texte : itérer <span>→</span></button>
+        <button className="primary" onClick={() => go("challenge")}>Transférer à mon métier <span>→</span></button>
       </div>}
       {stage > 0 && <div className="scene-back"><button className="text-button" onClick={() => setStage(stage - 1)}>← Revoir l’expérience précédente</button></div>}
     </section>
@@ -634,7 +634,7 @@ function Control({ app, update, go, openQuiz }: { app: AppState; update: UpdateA
     </section>
     <div className="action-row">
       <span>Un contrôle utile rend visibles les écarts ; il ne les efface pas.</span>
-      <button className="primary" onClick={() => go("challenge")}>Appliquer la méthode à mon métier <span>→</span></button>
+      <button className="primary" onClick={() => go("image")}>Découvrir le Laboratoire Image <span>→</span></button>
     </div>
   </section>;
 }
